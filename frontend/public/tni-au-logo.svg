@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="96" fill="#0d2137" stroke="#c9a227" stroke-width="4"/>
+  
+  <!-- Inner Ring -->
+  <circle cx="100" cy="100" r="82" fill="none" stroke="#c9a227" stroke-width="1.5" opacity="0.5"/>
+
+  <!-- Eagle Body -->
+  <ellipse cx="100" cy="108" rx="18" ry="22" fill="#c9a227"/>
+  
+  <!-- Eagle Head -->
+  <circle cx="100" cy="82" r="12" fill="#c9a227"/>
+  
+  <!-- Eagle Beak -->
+  <polygon points="100,87 107,92 100,96" fill="#e0b84a"/>
+  
+  <!-- Eagle Eye -->
+  <circle cx="103" cy="80" r="2.5" fill="#0d2137"/>
+  <circle cx="104" cy="79" r="0.8" fill="#c9a227"/>
+
+  <!-- Left Wing (spread wide) -->
+  <path d="M 82 100 Q 55 78 15 85 Q 30 95 45 98 Q 25 105 12 118 Q 35 112 55 108 Q 40 120 35 135 Q 58 122 70 112 Q 62 125 65 140 Q 80 125 82 110 Z" 
+        fill="#c9a227"/>
+  
+  <!-- Right Wing (spread wide) -->
+  <path d="M 118 100 Q 145 78 185 85 Q 170 95 155 98 Q 175 105 188 118 Q 165 112 145 108 Q 160 120 165 135 Q 142 122 130 112 Q 138 125 135 140 Q 120 125 118 110 Z" 
+        fill="#c9a227"/>
+
+  <!-- Eagle Tail -->
+  <path d="M 88 128 Q 100 145 112 128 L 108 150 Q 100 158 92 150 Z" fill="#c9a227"/>
+  
+  <!-- Eagle Talons -->
+  <path d="M 90 128 Q 85 138 80 142 M 90 128 Q 88 140 86 145 M 90 128 Q 92 140 94 145 M 110 128 Q 115 138 120 142 M 110 128 Q 112 140 114 145 M 110 128 Q 108 140 106 145" 
+        stroke="#c9a227" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Stars on chest -->
+  <polygon points="100,100 102,106 108,106 103,110 105,116 100,112 95,116 97,110 92,106 98,106" fill="#0d2137"/>
+  <polygon points="100,100 101,104 105,104 102,107 103,111 100,108 97,111 98,107 95,104 99,104" fill="#e0b84a" transform="scale(0.6) translate(67,68)"/>
+
+  <!-- Bottom text arc -->
+  <path id="bottomArc" d="M 25,130 A 80,80 0 0,0 175,130" fill="none"/>
+  
+  <!-- TNI AU Text -->
+  <text font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#c9a227" letter-spacing="3">
+    <textPath href="#bottomArc" startOffset="18%">TNI ANGKATAN UDARA</textPath>
+  </text>
+  
+  <!-- Top decorative line -->
+  <path d="M 40 56 Q 100 46 160 56" stroke="#c9a227" stroke-width="1" fill="none" opacity="0.6"/>
+  
+  <!-- Side stars -->
+  <polygon points="30,100 32,106 38,106 33,110 35,116 30,112 25,116 27,110 22,106 28,106" fill="#c9a227" transform="scale(0.5) translate(20,100)"/>
+  <polygon points="170,100 172,106 178,106 173,110 175,116 170,112 165,116 167,110 162,106 168,106" fill="#c9a227" transform="scale(0.5) translate(170,100)"/>
+</svg>
