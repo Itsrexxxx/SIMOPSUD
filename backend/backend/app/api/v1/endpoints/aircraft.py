@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 from app.core.database import get_db
 from app.models.aircraft import AircraftType, AircraftUnit
@@ -36,18 +36,28 @@ def create_aircraft_unit(item: AircraftUnitCreate, db: Session = Depends(get_db)
 
 @router.get("/units/", response_model=List[AircraftUnitResponse])
 def read_aircraft_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(AircraftUnit).offset(skip).limit(limit).all()
+    return db.query(AircraftUnit).options(selectinload(AircraftUnit.aircraft_type)).offset(skip).limit(limit).all()
 
 @router.patch("/units/{unit_id}", response_model=AircraftUnitResponse)
 def update_aircraft_unit(unit_id: int, item: AircraftUnitUpdate, db: Session = Depends(get_db)):
     db_item = db.query(AircraftUnit).filter(AircraftUnit.id == unit_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Aircraft Unit not found")
-        
+
     update_data = item.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_item, key, value)
-        
+
     db.commit()
     db.refresh(db_item)
     return db_item
+
+@router.delete("/units/{unit_id}")
+def delete_aircraft_unit(unit_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(AircraftUnit).filter(AircraftUnit.id == unit_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Aircraft Unit not found")
+
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Aircraft Unit deleted successfully"}

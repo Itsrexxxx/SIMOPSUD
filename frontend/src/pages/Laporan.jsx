@@ -21,11 +21,14 @@ const emptyDigest = {
   mitigation: [],
 };
 
+const acceptedTypes = ['csv', 'xlsx', 'xls'];
+
 export default function Laporan() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [digestData, setDigestData] = useState(emptyDigest);
   const [alertPage, setAlertPage] = useState(1);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
 
   const totalAlertCount = useMemo(
@@ -49,9 +52,41 @@ export default function Laporan() {
     URL.revokeObjectURL(url);
   };
 
+  const validateFile = (file) => {
+    if (!file) return false;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!acceptedTypes.includes(extension)) {
+      alert('Format file tidak valid. Gunakan file CSV, XLSX, atau XLS.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleFileSelection = (file) => {
+    if (!validateFile(file)) return;
+    setUploadedFile(file);
+  };
+
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] || null;
-    setUploadedFile(file);
+    handleFileSelection(file);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    setDragActive(false);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setDragActive(false);
+    const file = event.dataTransfer?.files?.[0] || null;
+    handleFileSelection(file);
   };
 
   const handleSubmit = async (event) => {
@@ -118,23 +153,27 @@ export default function Laporan() {
             <div className="flex items-center gap-4 rounded-2xl border border-sky-200 bg-white px-6 py-4 shadow-lg">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-200 border-t-sky-600" />
               <p className="text-base font-semibold text-sky-800">
-                Sedang Menganalisis Log Operasional Mabes AU... Harap Tunggu.
+                Memproses log operasional dan memvalidasi risiko data...
               </p>
             </div>
           </div>
         )}
 
         <div className="p-6 md:p-8">
-          <div className="rounded-2xl border border-dashed border-sky-300 bg-sky-50/60 p-6 md:p-8">
+          <div
+            className={`rounded-2xl border border-dashed p-6 md:p-8 transition ${dragActive ? 'border-sky-500 bg-sky-50' : 'border-sky-300 bg-sky-50/60'}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-2xl text-sky-700">
-                  📤
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Upload File Operasional</h2>
-                  <p className="text-sm text-slate-600">Format yang didukung: .csv, .xlsx, .xls</p>
-                </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Import Massal</p>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">Upload File Operasional</h2>
+                <p className="mt-1 text-sm text-slate-600">Format didukung: CSV, XLSX, XLS. Sistem akan menormalisasi header dan memproses data dalam satu alur.</p>
+              </div>
+              <div className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-slate-600">
+                {uploadedFile ? uploadedFile.name : 'Belum ada file dipilih'}
               </div>
             </div>
 
@@ -148,7 +187,7 @@ export default function Laporan() {
                   className="hidden"
                   disabled={isProcessing}
                 />
-                <span className="mr-2 text-lg">📁</span>
+                <span className="mr-2 text-base font-semibold text-sky-700">Pilih file</span>
                 {uploadedFile ? uploadedFile.name : 'Pilih file log operasional'}
               </label>
 
@@ -166,24 +205,26 @@ export default function Laporan() {
 
       {digestData && (
         <div className="mt-8 space-y-8">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Total Sortie</p>
-              <p className="mt-4 text-3xl font-bold text-slate-900">
-                {digestData.summary.total_flights_processed ?? 0}
-              </p>
+              <p className="mt-4 text-3xl font-bold text-slate-900">{digestData.summary.total_flights_processed ?? 0}</p>
+              <p className="mt-1 text-xs text-slate-500">Jumlah baris data yang diproses</p>
             </div>
-            <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Accumulated Flight Hours</p>
-              <p className="mt-4 text-3xl font-bold text-slate-900">
-                {Number(digestData.summary.total_flight_hours_added ?? 0).toFixed(1)}
-              </p>
+            <div className="rounded-2xl border border-cyan-100 bg-white p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Jam Terbang</p>
+              <p className="mt-4 text-3xl font-bold text-slate-900">{Number(digestData.summary.total_flight_hours_added ?? 0).toFixed(1)}</p>
+              <p className="mt-1 text-xs text-slate-500">Akumulasi flight hours</p>
             </div>
-            <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Total Fuel Consumed</p>
-              <p className="mt-4 text-3xl font-bold text-slate-900">
-                {Number(digestData.summary.total_fuel_consumed ?? 0).toFixed(1)} L
-              </p>
+            <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Konsumsi Avtur</p>
+              <p className="mt-4 text-3xl font-bold text-slate-900">{Number(digestData.summary.total_fuel_consumed ?? 0).toFixed(1)}</p>
+              <p className="mt-1 text-xs text-slate-500">Liter yang terpakai</p>
+            </div>
+            <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Peringatan</p>
+              <p className="mt-4 text-3xl font-bold text-red-600">{totalAlertCount}</p>
+              <p className="mt-1 text-xs text-slate-500">Item kritis yang terdeteksi</p>
             </div>
           </div>
 

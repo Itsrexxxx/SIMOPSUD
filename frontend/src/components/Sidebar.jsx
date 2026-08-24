@@ -5,7 +5,7 @@ const menuItems = [
   { path: '/pesawat', icon: 'flight', label: 'Inventaris Pesawat', section: 'DATA OPERASI' },
   { path: '/pangkalan', icon: 'location_on', label: 'Pangkalan & Logistik', section: 'DATA OPERASI' },
   { path: '/skenario', icon: 'timeline', label: 'Skenario Operasi', section: 'ANALISIS' },
-  { path: '/simulasi', icon: 'psychology', label: 'Analisis AI', section: 'ANALISIS' },
+  { path: '/simulasi', icon: 'psychology', label: 'AI Prediksi Otomatis', section: 'ANALISIS' },
   { path: '/laporan', icon: 'report_problem', label: 'Laporan Mitigasi', section: 'LAPORAN' },
 ];
 

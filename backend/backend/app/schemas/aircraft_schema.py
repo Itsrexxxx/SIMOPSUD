@@ -36,6 +36,7 @@ class AircraftUnitUpdate(BaseModel):
 
 class AircraftUnitResponse(AircraftUnitBase):
     id: int
+    aircraft_type: Optional[AircraftTypeResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 class AircraftTypeWithUnitsResponse(AircraftTypeResponse):

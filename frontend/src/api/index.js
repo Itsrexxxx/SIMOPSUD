@@ -10,10 +10,10 @@ const api = axios.create({
 
 // --- Aircraft API ---
 export const aircraftAPI = {
-  getTypes: () => api.get('/aircraft/types'),
-  createType: (data) => api.post('/aircraft/types', data),
-  getUnits: () => api.get('/aircraft/units'),
-  createUnit: (data) => api.post('/aircraft/units', data),
+  getTypes: () => api.get('/aircraft/types/'),
+  createType: (data) => api.post('/aircraft/types/', data),
+  getUnits: () => api.get('/aircraft/units/'),
+  createUnit: (data) => api.post('/aircraft/units/', data),
   updateUnitStatus: (id, data) => api.patch(`/aircraft/units/${id}`, data),
   deleteUnit: (id) => api.delete(`/aircraft/units/${id}`),
 };
@@ -22,13 +22,14 @@ export const aircraftAPI = {
 export const airbaseAPI = {
   getAll: () => api.get('/airbase/'),
   create: (data) => api.post('/airbase/', data),
-  update: (id, data) => api.put(`/airbase/${id}`, data),
+  update: (id, data) => api.patch(`/airbase/${id}`, data),
   delete: (id) => api.delete(`/airbase/${id}`),
 };
 
 // --- Scenarios API ---
 export const scenarioAPI = {
   getAll: () => api.get('/scenarios/'),
+  getAutomaticPrediction: () => api.get('/scenarios/auto-prediction'),
   create: (data) => api.post('/scenarios/', data),
   delete: (id) => api.delete(`/scenarios/${id}`),
   runSimulation: (data) => api.post('/scenarios/run-simulation', data),

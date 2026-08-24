@@ -112,6 +112,38 @@ textarea {
   max-width: 1400px;
 }
 
+.simulation-result-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 16px;
+}
+
+.metric-list {
+  display: grid;
+  gap: 12px;
+}
+
+.metric-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--input-border);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.metric-list strong {
+  color: var(--text-primary);
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .simulation-result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* === NAVBAR === */
 .navbar {
   position: fixed;

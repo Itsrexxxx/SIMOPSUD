@@ -37,6 +37,13 @@ class SupervisedLearningEngine:
         Memprediksi probabilitas terjadinya hambatan (bottleneck) 
         serta memberikan rekomendasi Mitigasi Hambatan.
         """
+        if deployed_aircraft <= 0:
+            return {
+                "probability_critical_percent": 0.0,
+                "is_critical": False,
+                "mitigations": ["Data pesawat belum tersedia, sehingga prediksi risiko belum dapat dilakukan."],
+            }
+
         features = np.array([[flight_hours, available_trucks, available_forklifts, deployed_aircraft]])
         
         # Mendapatkan probabilitas kelas 1 (Kritis)

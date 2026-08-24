@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { scenarioAPI, airbaseAPI, aircraftAPI } from '../api';
 import { AIAlertBanner, StatusBadge, Spinner } from '../components/UI';
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export default function Simulasi() {
   const [scenarios, setScenarios] = useState([]);
@@ -14,8 +15,23 @@ export default function Simulasi() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [automaticPrediction, setAutomaticPrediction] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(true);
+  const [predictionError, setPredictionError] = useState('');
 
   useEffect(() => {
+    const loadAutomaticPrediction = async () => {
+      try {
+        setPredictionError('');
+        const response = await scenarioAPI.getAutomaticPrediction();
+        setAutomaticPrediction(response.data);
+      } catch (e) {
+        setPredictionError('Prediksi otomatis belum dapat dimuat. Pastikan backend aktif.');
+      } finally {
+        setPredictionLoading(false);
+      }
+    };
+
     const load = async () => {
       try {
         const [s, b, u] = await Promise.all([scenarioAPI.getAll(), airbaseAPI.getAll(), aircraftAPI.getUnits()]);
@@ -25,6 +41,9 @@ export default function Simulasi() {
       } catch { }
     };
     load();
+    loadAutomaticPrediction();
+    const refreshTimer = setInterval(loadAutomaticPrediction, 30000);
+    return () => clearInterval(refreshTimer);
   }, []);
 
   const toggleUnit = (tn) => {
@@ -66,15 +85,153 @@ export default function Simulasi() {
   const cons = result?.consumption;
   const bots = result?.bottlenecks;
   const grounded = result?.newly_grounded_aircraft || [];
+  const predictions = automaticPrediction?.airbase_predictions || [];
+  const criticalPredictionCount = predictions.filter(item => item.is_critical).length;
+  const averageRisk = predictions.length > 0
+    ? predictions.reduce((sum, item) => sum + Number(item.probability_critical_percent || 0), 0) / predictions.length
+    : 0;
+  const highestRiskBase = predictions.reduce(
+    (highest, item) => Number(item.probability_critical_percent || 0) > Number(highest?.probability_critical_percent || 0) ? item : highest,
+    null
+  );
+  const riskChartData = predictions.map((item) => ({
+    name: item.airbase_name.replace(/^Lanud /, ''),
+    risk: Number(item.probability_critical_percent || 0),
+    critical: item.is_critical,
+  }));
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div>
           <h1 className="page-title"><span className="page-title-accent">MODEL PREDIKTIF</span> TITIK KRITIS</h1>
-          <p className="page-subtitle">Analisa Prediktif Titik Kritis dan Mitigasi Hambatan berdasarkan jam terbang dalam dukungan operasi udara berbasis supervised learning</p>
+          <p className="page-subtitle">Pusat AI untuk prediksi risiko operasional dan rekomendasi mitigasi berbasis kondisi armada serta dukungan pangkalan terkini.</p>
         </div>
-        <span className="badge badge-aman">🤖 AI Engine: Active</span>
+        <span className="badge badge-aman">AI Engine Aktif</span>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Monitoring Prediksi Otomatis</div>
+            <div className="text-muted text-sm" style={{ marginTop: 4 }}>Model berjalan otomatis tanpa menunggu tombol simulasi.</div>
+          </div>
+          <span className={`badge ${automaticPrediction?.is_critical ? 'badge-kritis' : 'badge-aman'}`}>
+            <span className="status-dot" /> {automaticPrediction?.model_status === 'active' ? 'AI Engine Aktif' : 'Menunggu Data'}
+          </span>
+        </div>
+
+        {predictionLoading ? (
+          <div className="empty-center"><Spinner /></div>
+        ) : predictionError ? (
+          <div className="error-box">{predictionError}</div>
+        ) : (
+          <>
+            <div className="summary-grid">
+              <div className="summary-stat">
+                <div className={`stat-value ${automaticPrediction.is_critical ? 'text-danger' : 'text-success'}`}>
+                  {Number(automaticPrediction.overall_probability_critical_percent || 0).toFixed(1)}%
+                </div>
+                <div className="stat-label">Probabilitas risiko tertinggi</div>
+              </div>
+              <div className="summary-stat">
+                <div className="stat-value text-accent">{automaticPrediction.ready_aircraft_count || 0}</div>
+                <div className="stat-label">Pesawat siap dianalisis</div>
+              </div>
+              <div className="summary-stat">
+                <div className="stat-value text-accent">{Number(automaticPrediction.average_flight_hours || 0).toFixed(1)}</div>
+                <div className="stat-label">Rata-rata jam terbang</div>
+              </div>
+              <div className="summary-stat">
+                <div className="stat-value text-accent">{predictions.length}</div>
+                <div className="stat-label">Pangkalan dipantau</div>
+              </div>
+            </div>
+
+            <div className={`ai-alert-banner ${automaticPrediction.is_critical ? 'critical' : 'safe'}`} style={{ marginTop: 16 }}>
+              <div>
+                <strong>{automaticPrediction.is_critical ? 'Risiko hambatan terdeteksi' : 'Operasi berada dalam batas wajar'}</strong>
+                <p>Analisis ini menggunakan data aktual armada dan logistik pangkalan. Pembaruan otomatis setiap 30 detik.</p>
+              </div>
+            </div>
+
+            {automaticPrediction.mitigations?.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="form-label">Rekomendasi Mitigasi AI</div>
+                <ul className="text-secondary text-sm">
+                  {automaticPrediction.mitigations.map((item, index) => <li key={index}>• {item}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {predictions.length > 0 && (
+              <div className="simulation-result-grid" style={{ marginTop: 16 }}>
+                <div className="card">
+                  <div className="card-header"><div className="card-title">Profil Risiko per Pangkalan</div></div>
+                  <div style={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={riskChartData} margin={{ top: 8, right: 12, left: -18, bottom: 48 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#dbe4ea" />
+                        <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} height={70} tick={{ fontSize: 10, fill: '#444651' }} />
+                        <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10, fill: '#444651' }} />
+                        <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Risiko kritis']} />
+                        <Bar dataKey="risk" radius={[4, 4, 0, 0]}>
+                          {riskChartData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={item.critical ? '#ba1a1a' : '#006398'} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-header"><div className="card-title">Ringkasan Risiko</div></div>
+                  <div className="summary-stat" style={{ marginBottom: 16 }}>
+                    <div className="stat-value text-danger">{highestRiskBase ? `${Number(highestRiskBase.probability_critical_percent).toFixed(1)}%` : '0%'}</div>
+                    <div className="stat-label">Risiko tertinggi: {highestRiskBase?.airbase_name || '-'}</div>
+                  </div>
+                  <div className="metric-list">
+                    <div><span>Rata-rata risiko</span><strong>{averageRisk.toFixed(1)}%</strong></div>
+                    <div><span>Pangkalan berisiko</span><strong>{criticalPredictionCount} dari {predictions.length}</strong></div>
+                    <div><span>Total truk dianalisis</span><strong>{predictions.reduce((sum, item) => sum + Number(item.available_trucks || 0), 0)}</strong></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {predictions.length > 0 && (
+              <div className="table-container" style={{ marginTop: 16 }}>
+                <table className="data-table">
+                  <thead><tr><th>Pangkalan</th><th>Probabilitas</th><th>Input Dukungan</th><th>Status Model</th><th>Mitigasi</th></tr></thead>
+                  <tbody>
+                    {predictions.map((item) => (
+                      <tr key={item.airbase_id}>
+                        <td className="font-bold">{item.airbase_name}</td>
+                        <td className="text-mono">{Number(item.probability_critical_percent || 0).toFixed(1)}%</td>
+                        <td className="text-muted text-sm">{item.available_trucks} truk · {item.available_forklifts} forklift · estimasi {item.deployed_aircraft} pesawat</td>
+                        <td><span className={`badge ${item.is_critical ? 'badge-kritis' : 'badge-aman'}`}>{item.is_critical ? 'KRITIS' : 'AMAN'}</span></td>
+                        <td className="text-muted text-sm">{item.mitigations?.[0] || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="text-muted text-sm" style={{ marginTop: 12 }}>Analisis terakhir: {automaticPrediction.generated_at ? new Date(automaticPrediction.generated_at).toLocaleString('id-ID') : '-'}</div>
+            <div className="card" style={{ marginTop: 16, background: 'var(--surface-muted, #f8fafc)' }}>
+              <div className="form-label">Transparansi Sumber Prediksi</div>
+              <div className="text-secondary text-sm" style={{ display: 'grid', gap: 6 }}>
+                <div><strong>Sumber input:</strong> {automaticPrediction.prediction_source}</div>
+                <div><strong>Model:</strong> {automaticPrediction.model_name}</div>
+                <div><strong>Target:</strong> {automaticPrediction.prediction_target}</div>
+                <div><strong>Pelatihan:</strong> {automaticPrediction.training_source}</div>
+                <div><strong>Fitur:</strong> {automaticPrediction.features?.join(', ')}</div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="section-heading" style={{ marginBottom: 12 }}>
+        <h2>Simulasi Skenario Manual</h2>
+        <p>Gunakan fitur ini untuk menguji rencana pengerahan tertentu dan membuat laporan PDF.</p>
       </div>
 
       <div className={`simulation-layout${result ? ' wide' : ''}`}>
@@ -158,12 +315,12 @@ export default function Simulasi() {
 
           {error && (
             <div className="error-box">
-              ⚠ {error}
+              {error}
             </div>
           )}
 
           <button className="btn btn-primary w-full btn-lg" onClick={runSim} disabled={running}>
-            {running ? <><Spinner /> &nbsp;Menjalankan Prediksi AI...</> : '🚀 Jalankan Analisa Prediktif'}
+            {running ? <><Spinner /> &nbsp;Menjalankan Prediksi AI...</> : 'Jalankan Analisa Prediktif'}
           </button>
         </div>
 
@@ -179,11 +336,58 @@ export default function Simulasi() {
               />
             )}
 
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <div className="card-title">Statistik Hasil Prediksi Skenario</div>
+                  <div className="text-muted text-sm" style={{ marginTop: 4 }}>Ringkasan dampak pengerahan yang baru saja dianalisis oleh model.</div>
+                </div>
+              </div>
+              <div className="summary-grid">
+                <div className="summary-stat">
+                  <div className={`stat-value ${ai?.is_critical ? 'text-danger' : 'text-success'}`}>{Number(ai?.probability_critical_percent || 0).toFixed(1)}%</div>
+                  <div className="stat-label">Probabilitas bottleneck</div>
+                </div>
+                <div className="summary-stat">
+                  <div className="stat-value text-accent">{form.tail_numbers.length}</div>
+                  <div className="stat-label">Pesawat dikerahkan</div>
+                </div>
+                <div className="summary-stat">
+                  <div className="stat-value text-accent">{Number(cons?.total_flight_hours || 0).toFixed(1)}</div>
+                  <div className="stat-label">Jam terbang skenario</div>
+                </div>
+                <div className="summary-stat">
+                  <div className={`stat-value ${grounded.length > 0 ? 'text-danger' : 'text-success'}`}>{grounded.length}</div>
+                  <div className="stat-label">Pesawat terkena maintenance trigger</div>
+                </div>
+              </div>
+              {bots && (
+                <div className="summary-grid" style={{ marginTop: 16 }}>
+                  <div className="summary-stat">
+                    <div className="stat-value text-accent">{bots.required_trucks}/{bots.available_trucks}</div>
+                    <div className="stat-label">Truk dibutuhkan / tersedia</div>
+                  </div>
+                  <div className="summary-stat">
+                    <div className="stat-value text-accent">{bots.required_forklifts}/{bots.available_forklifts}</div>
+                    <div className="stat-label">Forklift dibutuhkan / tersedia</div>
+                  </div>
+                  <div className="summary-stat">
+                    <div className="stat-value text-accent">{Number(form.daily_flight_hours_per_aircraft || 0).toFixed(1)}</div>
+                    <div className="stat-label">Jam per pesawat / hari</div>
+                  </div>
+                  <div className="summary-stat">
+                    <div className={`stat-value ${bots.is_bottleneck ? 'text-danger' : 'text-success'}`}>{bots.is_bottleneck ? 'KRITIS' : 'AMAN'}</div>
+                    <div className="stat-label">Status dukungan pangkalan</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Consumption Summary */}
             {cons && (
               <div className="card">
                 <div className="card-header">
-                  <div className="card-title">⛽ Ringkasan Konsumsi Logistik</div>
+                  <div className="card-title">Ringkasan Konsumsi Logistik</div>
                 </div>
                 <div className="summary-grid">
                   {[
@@ -204,7 +408,7 @@ export default function Simulasi() {
             {bots && (
               <div className="card">
                 <div className="card-header">
-                  <div className="card-title">📊 Analisa Titik Kritis Infrastruktur</div>
+                  <div className="card-title">Analisa Titik Kritis Infrastruktur</div>
                 </div>
                 <table className="data-table">
                   <thead><tr><th>Elemen</th><th>Dibutuhkan</th><th>Tersedia</th><th>Status</th></tr></thead>
@@ -230,7 +434,7 @@ export default function Simulasi() {
             {grounded.length > 0 && (
               <div className="card">
                 <div className="card-header">
-                  <div className="card-title card-title-gold">🚫 Maintenance Trigger — Pesawat Digrounding</div>
+                  <div className="card-title card-title-gold">Maintenance Trigger — Pesawat Digrounding</div>
                 </div>
                 <table className="data-table">
                   <thead><tr><th>Tail Number</th><th>Akm. Jam Terbang</th><th>Status Baru</th></tr></thead>
@@ -250,7 +454,7 @@ export default function Simulasi() {
             {/* Download PDF */}
             {downloadUrl && (
               <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-lg w-full btn-full">
-                📥 Unduh Laporan PDF — Analisa Prediktif SIMKO
+                Unduh Laporan PDF — Analisa Prediktif SIMKO
               </a>
             )}
           </div>

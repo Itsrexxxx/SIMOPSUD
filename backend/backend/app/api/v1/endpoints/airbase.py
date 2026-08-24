@@ -24,11 +24,21 @@ def update_airbase(airbase_id: int, item: AirBaseUpdate, db: Session = Depends(g
     db_item = db.query(AirBase).filter(AirBase.id == airbase_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Airbase not found")
-        
+
     update_data = item.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_item, key, value)
-        
+
     db.commit()
     db.refresh(db_item)
     return db_item
+
+@router.delete("/{airbase_id}")
+def delete_airbase(airbase_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(AirBase).filter(AirBase.id == airbase_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Airbase not found")
+
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Airbase deleted successfully"}

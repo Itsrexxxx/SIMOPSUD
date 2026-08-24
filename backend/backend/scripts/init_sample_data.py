@@ -8,7 +8,7 @@ Adjusted to match the exact schema constraints of the database:
 from app.core.database import SessionLocal, engine
 from app.models.aircraft import AircraftType, AircraftUnit
 from app.models.airbase import AirBase
-# from app.models.scenario import Scenario 
+from app.models.scenario import OperationsScenario, ScenarioDeployment
 from sqlalchemy.exc import IntegrityError
 
 def create_sample_data():
@@ -149,6 +149,29 @@ def create_sample_data():
                 print(f"✅ Menambahkan unit ekor pesawat: {unit.tail_number}")
         
         db.commit()
+
+        # --- 2B. DATA TAMBAHAN UNTUK VARIASI PREDIKSI AI ---
+        varied_units = [
+            AircraftUnit(aircraft_type_id=rafale_t.id, tail_number="TS-4510", accumulated_flight_hours=2850, status="MAINTENANCE"),
+            AircraftUnit(aircraft_type_id=f16_t.id, tail_number="TS-1652", accumulated_flight_hours=3100, status="MANDATORY_GROUNDING"),
+            AircraftUnit(aircraft_type_id=su30_t.id, tail_number="TS-3022", accumulated_flight_hours=760, status="READY"),
+            AircraftUnit(aircraft_type_id=su27_t.id, tail_number="TS-2714", accumulated_flight_hours=2680, status="MAINTENANCE"),
+            AircraftUnit(aircraft_type_id=t50_t.id, tail_number="TT-5025", accumulated_flight_hours=420, status="READY"),
+            AircraftUnit(aircraft_type_id=hawk_t.id, tail_number="TT-0224", accumulated_flight_hours=3350, status="MANDATORY_GROUNDING"),
+            AircraftUnit(aircraft_type_id=tucano_t.id, tail_number="TT-3115", accumulated_flight_hours=230, status="READY"),
+            AircraftUnit(aircraft_type_id=hercules_t.id, tail_number="A-1351", accumulated_flight_hours=1950, status="READY"),
+            AircraftUnit(aircraft_type_id=a400m_t.id, tail_number="A-4008", accumulated_flight_hours=2750, status="MAINTENANCE"),
+            AircraftUnit(aircraft_type_id=c295_t.id, tail_number="A-2912", accumulated_flight_hours=680, status="READY"),
+            AircraftUnit(aircraft_type_id=b737_t.id, tail_number="AI-7314", accumulated_flight_hours=5200, status="MANDATORY_GROUNDING"),
+            AircraftUnit(aircraft_type_id=falcon_t.id, tail_number="A-0812", accumulated_flight_hours=110, status="READY"),
+        ]
+        for unit in varied_units:
+            existing = db.query(AircraftUnit).filter_by(tail_number=unit.tail_number).first()
+            if not existing:
+                db.add(unit)
+                print(f"✅ Menambahkan unit variasi AI: {unit.tail_number} ({unit.status})")
+
+        db.commit()
         
         # --- 3. MEMBUAT DATA PANGKALAN UDARA (AIRBASES) ---
         # Data 24 Lanud Utama
@@ -190,7 +213,40 @@ def create_sample_data():
             if not existing:
                 db.add(base)
                 print(f"✅ Menambahkan pangkalan udara: {base.name}")
+
+        varied_airbases = [
+            AirBase(name="Lanud Cakrawala Timur", location="Maluku Utara", status="warning", avtur_capacity_liters=450000, avtur_stock_liters=105000, special_lube_stock_liters=1200, refueler_trucks_count=4, refueler_trucks_active=1, forklifts_count=1, apron_capacity_aircraft=8, apron_used=7),
+            AirBase(name="Lanud Garuda Selatan", location="Nusa Tenggara Timur", status="critical", avtur_capacity_liters=300000, avtur_stock_liters=45000, special_lube_stock_liters=400, refueler_trucks_count=3, refueler_trucks_active=1, forklifts_count=0, apron_capacity_aircraft=6, apron_used=6),
+            AirBase(name="Lanud Nusantara Barat", location="Sumatra Selatan", status="optimal", avtur_capacity_liters=1400000, avtur_stock_liters=1250000, special_lube_stock_liters=6800, refueler_trucks_count=8, refueler_trucks_active=8, forklifts_count=5, apron_capacity_aircraft=24, apron_used=9),
+            AirBase(name="Lanud Rajawali Utara", location="Kalimantan Utara", status="warning", avtur_capacity_liters=650000, avtur_stock_liters=195000, special_lube_stock_liters=900, refueler_trucks_count=5, refueler_trucks_active=2, forklifts_count=1, apron_capacity_aircraft=10, apron_used=8),
+        ]
+        for base in varied_airbases:
+            existing = db.query(AirBase).filter_by(name=base.name).first()
+            if not existing:
+                db.add(base)
+                print(f"✅ Menambahkan pangkalan variasi AI: {base.name} ({base.status})")
         
+        db.commit()
+
+        # --- 4. SKENARIO DAN DEPLOYMENT UNTUK SIMULASI AI ---
+        scenario_definitions = [
+            ("Patroli Perbatasan Utara", "Pengerahan terbatas dengan dukungan logistik memadai.", ["TS-4501", "TS-4502", "TT-5001"]),
+            ("Operasi Siaga Maritim", "Pengerahan armada intai dengan beban jam terbang tinggi.", ["AI-7301", "AI-7314", "A-2301", "A-2901"]),
+            ("Latihan Gabungan Skala Besar", "Simulasi pengerahan multi-peran untuk menguji kapasitas pangkalan.", ["TS-1601", "TS-1641", "TS-3001", "TS-3011", "A-1339", "A-1340"]),
+            ("Dukungan Kemanusiaan Regional", "Operasi angkut dengan prioritas kesiapan dan konsumsi bahan bakar.", ["A-4001", "A-4008", "A-1351", "TT-3101"]),
+        ]
+        for name, description, tail_numbers in scenario_definitions:
+            scenario = db.query(OperationsScenario).filter_by(name=name).first()
+            if not scenario:
+                scenario = OperationsScenario(name=name, description=description)
+                db.add(scenario)
+                db.flush()
+                for tail_number in tail_numbers:
+                    aircraft = db.query(AircraftUnit).filter_by(tail_number=tail_number).first()
+                    if aircraft:
+                        db.add(ScenarioDeployment(scenario_id=scenario.id, aircraft_id=aircraft.id))
+                print(f"✅ Menambahkan skenario operasi: {name}")
+
         db.commit()
         print("\n✅ Pembuatan seluruh data sampel TNI AU berhasil diselesaikan!")
         
