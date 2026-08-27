@@ -35,9 +35,11 @@ export default function Dashboard() {
 
         // Calculate stats
         const readyCount = aircraftUnits.filter((a) => a.status === 'Ready').length;
-        const groundedCount = aircraftUnits.filter((a) => a.status === 'Grounded').length;
+        const groundedCount = aircraftUnits.filter(
+          (a) => a.status === 'Mandatory Grounding' || a.status === 'Grounded'
+        ).length;
         const criticalFlightHours = aircraftUnits.filter(
-          (a) => a.accumulated_flight_hours > 2700
+          (a) => a.accumulated_flight_hours >= 280
         ).length;
 
         const fuelRisk = airbaseList.filter((base) => {
@@ -77,8 +79,8 @@ export default function Dashboard() {
       const days = ['H-6', 'H-5', 'H-4', 'H-3', 'H-2', 'H-1', 'Hari Ini'];
       const trend = days.map((day, index) => ({
         hari: day,
-        jamTerbang: Math.floor(Math.random() * 200 + 100),
-        konsumsiAvtur: Math.floor(Math.random() * 300000 + 200000),
+        jamTerbang: Math.floor(Math.random() * 80 + 120),
+        konsumsiAvtur: Math.floor(Math.random() * 250000 + 200000),
       }));
       setFlightTrendData(trend);
     };
@@ -87,13 +89,13 @@ export default function Dashboard() {
       const generatedAlerts = [];
 
       // Check for high flight hours
-      const highHourAircraft = aircraft.find((a) => a.accumulated_flight_hours > 2700);
+      const highHourAircraft = aircraft.find((a) => a.accumulated_flight_hours >= 280);
       if (highHourAircraft) {
         generatedAlerts.push({
           icon: 'warning',
-          title: `${highHourAircraft.tail_number} mendekati batas servis`,
-          description: 'Jam terbang operasional mendekati maksimal. Rekomendasi scheduling pemeliharaan segera.',
-          badge: 'Baru',
+          title: `${highHourAircraft.tail_number} mendekati batas batas aman (${highHourAircraft.accumulated_flight_hours} jam)`,
+          description: 'Akumulasi jam terbang mendekati batas 300 jam. Rekomendasi scheduling pemeliharaan (Phase Check) segera.',
+          badge: 'Prioritas Tinggi',
           tone: 'critical',
         });
       }
@@ -433,26 +435,31 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {units.slice(0, 5).map((unit) => {
+                    {units.slice(0, 8).map((unit) => {
                       const hours = Number(unit.accumulated_flight_hours || 0);
-                      const percentage = Math.min((hours / 3000) * 100, 100);
+                      const percentage = Math.min((hours / 300) * 100, 100);
 
                       let statusLabel = 'Siap';
                       let statusTone = 'bg-emerald-100 text-emerald-700';
                       let recommendation = 'Operasi normal';
                       let recommendationTone = 'bg-emerald-50 text-emerald-700';
 
-                      if (unit.status === 'MAINTENANCE' || unit.status === 'Maintenance') {
+                      if (unit.status === 'Mandatory Grounding' || unit.status === 'Grounded') {
+                        statusLabel = 'Grounding';
+                        statusTone = 'bg-purple-100 text-purple-700';
+                        recommendation = 'Wajib Grounding';
+                        recommendationTone = 'bg-purple-50 text-purple-700';
+                      } else if (unit.status === 'MAINTENANCE' || unit.status === 'Maintenance') {
                         statusLabel = 'Maintenance';
                         statusTone = 'bg-red-100 text-red-700';
                         recommendation = 'Berhenti operasi';
                         recommendationTone = 'bg-red-50 text-red-700';
-                      } else if (hours >= 2700) {
-                        statusLabel = 'Critical';
+                      } else if (hours >= 280) {
+                        statusLabel = 'Kritis';
                         statusTone = 'bg-red-100 text-red-700';
                         recommendation = 'Servis mendesak';
                         recommendationTone = 'bg-red-50 text-red-700';
-                      } else if (hours >= 2200) {
+                      } else if (hours >= 220) {
                         statusLabel = 'Waspada';
                         statusTone = 'bg-amber-100 text-amber-700';
                         recommendation = 'Jadwal servis';
@@ -470,7 +477,7 @@ export default function Dashboard() {
                             <div className="flex items-center gap-2">
                               <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100">
                                 <div 
-                                  className={`h-full rounded-full ${percentage > 80 ? 'bg-red-500' : percentage > 60 ? 'bg-amber-500' : 'bg-sky-500'}`} 
+                                  className={`h-full rounded-full ${percentage >= 93 ? 'bg-purple-600' : percentage >= 80 ? 'bg-red-500' : percentage >= 65 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
                                   style={{ width: `${Math.min(percentage, 100)}%` }} 
                                 />
                               </div>
@@ -487,8 +494,8 @@ export default function Dashboard() {
                 </table>
               </div>
               <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                <p className="font-semibold mb-1 text-slate-700\">Catatan:</p>
-                <p>Standar maintenance pesawat militer: 3000 jam terbang. Jika mencapai 2700 jam, perlu scheduling servis komprehensif. Data dimonitor real-time untuk antisipasi disruption operasional.</p>
+                <p className="font-semibold mb-1 text-slate-700">Catatan:</p>
+                <p>Ambang batas jam terbang operasional (Phase Check/Overhaul): 300 jam terbang. Jika mencapai 280 jam, sistem AI menandai sebagai titik kritis untuk scheduling pemeliharaan segera.</p>
               </div>
             </div>
           </>

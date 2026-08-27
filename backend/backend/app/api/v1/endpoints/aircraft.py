@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 from typing import List
 from app.core.database import get_db
 from app.models.aircraft import AircraftType, AircraftUnit
+from app.models.airbase import AirBase
 from app.schemas.aircraft_schema import (
     AircraftTypeCreate, AircraftTypeResponse, AircraftTypeUpdate,
     AircraftUnitCreate, AircraftUnitResponse, AircraftUnitUpdate
@@ -28,6 +29,8 @@ def read_aircraft_types(skip: int = 0, limit: int = 100, db: Session = Depends(g
 
 @router.post("/units/", response_model=AircraftUnitResponse)
 def create_aircraft_unit(item: AircraftUnitCreate, db: Session = Depends(get_db)):
+    if item.airbase_id is not None and not db.query(AirBase).filter(AirBase.id == item.airbase_id).first():
+        raise HTTPException(status_code=404, detail="Airbase not found")
     db_item = AircraftUnit(**item.model_dump())
     db.add(db_item)
     db.commit()
@@ -36,7 +39,10 @@ def create_aircraft_unit(item: AircraftUnitCreate, db: Session = Depends(get_db)
 
 @router.get("/units/", response_model=List[AircraftUnitResponse])
 def read_aircraft_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(AircraftUnit).options(selectinload(AircraftUnit.aircraft_type)).offset(skip).limit(limit).all()
+    return db.query(AircraftUnit).options(
+        selectinload(AircraftUnit.aircraft_type),
+        selectinload(AircraftUnit.airbase),
+    ).offset(skip).limit(limit).all()
 
 @router.patch("/units/{unit_id}", response_model=AircraftUnitResponse)
 def update_aircraft_unit(unit_id: int, item: AircraftUnitUpdate, db: Session = Depends(get_db)):
@@ -45,6 +51,8 @@ def update_aircraft_unit(unit_id: int, item: AircraftUnitUpdate, db: Session = D
         raise HTTPException(status_code=404, detail="Aircraft Unit not found")
 
     update_data = item.model_dump(exclude_unset=True)
+    if update_data.get("airbase_id") is not None and not db.query(AirBase).filter(AirBase.id == update_data["airbase_id"]).first():
+        raise HTTPException(status_code=404, detail="Airbase not found")
     for key, value in update_data.items():
         setattr(db_item, key, value)
 

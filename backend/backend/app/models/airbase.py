@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class AirBase(Base):
@@ -22,3 +23,5 @@ class AirBase(Base):
     # Infrastructure
     apron_capacity_aircraft = Column(Integer, default=0, comment="Number of aircraft that can be accommodated")
     apron_used = Column(Integer, default=0, comment="Number of apron bays currently used")
+
+    aircraft_units = relationship("AircraftUnit", back_populates="airbase")

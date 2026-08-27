@@ -124,6 +124,11 @@ def update_user_by_admin(
     # Update role if provided
     if obj_in.role is not None:
         db_user.role = obj_in.role
+
+    if obj_in.service_unit is not None:
+        db_user.service_unit = obj_in.service_unit
+    if obj_in.permissions is not None:
+        db_user.permissions = obj_in.permissions
     
     # Update approval status if provided
     if obj_in.is_approved is not None:

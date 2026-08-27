@@ -74,7 +74,7 @@ export function UserProvider({ children }) {
    * Check if user has specific role
    */
   const hasRole = (role) => {
-    return user?.role === role;
+    return user?.role === role || (role === 'Admin' && user?.role === 'Administrator') || (role === 'Operator' && user?.role === 'Analyst') || (role === 'Pimpinan' && user?.role === 'Executive');
   };
 
   /**

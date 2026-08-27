@@ -228,6 +228,14 @@ def create_sample_data():
         
         db.commit()
 
+        # Assign existing and new aircraft to real airbases for location tracking.
+        all_airbases = db.query(AirBase).order_by(AirBase.id).all()
+        all_aircraft = db.query(AircraftUnit).order_by(AircraftUnit.id).all()
+        for index, aircraft in enumerate(all_aircraft):
+            if aircraft.airbase_id is None and all_airbases:
+                aircraft.airbase_id = all_airbases[index % len(all_airbases)].id
+        db.commit()
+
         # --- 4. SKENARIO DAN DEPLOYMENT UNTUK SIMULASI AI ---
         scenario_definitions = [
             ("Patroli Perbatasan Utara", "Pengerahan terbatas dengan dukungan logistik memadai.", ["TS-4501", "TS-4502", "TT-5001"]),

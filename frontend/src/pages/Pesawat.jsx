@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { aircraftAPI } from '../api';
+import { aircraftAPI, airbaseAPI } from '../api';
 
 const STATUS_STYLES = {
   Ready: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
@@ -13,11 +13,13 @@ const defaultForm = {
   aircraft_type_id: '',
   status: 'Ready',
   accumulated_flight_hours: 0,
+  airbase_id: '',
 };
 
 export default function Pesawat() {
   const [units, setUnits] = useState([]);
   const [types, setTypes] = useState([]);
+  const [airbases, setAirbases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export default function Pesawat() {
   useEffect(() => {
     loadTypes();
     loadUnits();
+    airbaseAPI.getAll().then((response) => setAirbases(response.data || [])).catch(() => setAirbases([]));
   }, []);
 
   const prepareForm = (unit = null) => {
@@ -64,6 +67,7 @@ export default function Pesawat() {
             aircraft_type_id: unit.aircraft_type_id ?? '',
             status: unit.status || 'Ready',
             accumulated_flight_hours: unit.accumulated_flight_hours ?? 0,
+            airbase_id: unit.airbase_id ?? '',
           }
         : { ...defaultForm }
     );
@@ -84,6 +88,7 @@ export default function Pesawat() {
         aircraft_type_id: Number(unitForm.aircraft_type_id),
         status: unitForm.status,
         accumulated_flight_hours: Number(unitForm.accumulated_flight_hours || 0),
+        airbase_id: unitForm.airbase_id ? Number(unitForm.airbase_id) : null,
       };
 
       if (unitForm.id) {
@@ -131,9 +136,11 @@ export default function Pesawat() {
 
   const filteredUnits = units.filter((u) => {
     const typeName = u.aircraft_type?.name || '';
+    const airbaseName = u.airbase?.name || '';
     const matchesSearch =
       u.tail_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      typeName.toLowerCase().includes(searchTerm.toLowerCase());
+      typeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      airbaseName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !categoryFilter || String(u.aircraft_type_id) === String(categoryFilter);
     return matchesSearch && matchesCategory;
   });
@@ -302,6 +309,7 @@ export default function Pesawat() {
                     <th className="px-6 py-4 text-left text-xs font-bold text-blue-900 uppercase">Kategori</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-blue-900 uppercase">Jam Terbang</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-blue-900 uppercase">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-blue-900 uppercase">Lanud Saat Ini</th>
                     <th className="px-6 py-4 text-right text-xs font-bold text-blue-900 uppercase">Aksi</th>
                   </tr>
                 </thead>
@@ -315,7 +323,6 @@ export default function Pesawat() {
                       <tr key={unit.id} className="border-t border-slate-200 hover:bg-slate-50">
                         <td className="px-6 py-4">
                           <div className="font-bold text-slate-900">{unit.tail_number}</div>
-                          <div className="text-sm text-slate-500">{unit.aircraft_type?.name || '-'}</div>
                         </td>
                         <td className="px-6 py-4 text-slate-700">
                           {unit.aircraft_type?.name || 'Belum dikategorikan'}
@@ -336,6 +343,10 @@ export default function Pesawat() {
                           <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusStyle}`}>
                             {getStatusLabel(unit.status)}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-700">
+                          <div className="font-semibold">{unit.airbase?.name || 'Belum ditempatkan'}</div>
+                          <div className="text-xs text-slate-500">Pangkalan udara · {unit.airbase?.location || 'Lokasi belum diisi'}</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex justify-end gap-2">
@@ -405,6 +416,20 @@ export default function Pesawat() {
                   <option value="Ready">Siap Operasi</option>
                   <option value="Maintenance">Perawatan</option>
                   <option value="Mandatory Grounding">Grounding</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Pangkalan Udara Saat Ini</label>
+                <select
+                  value={unitForm.airbase_id}
+                  onChange={(e) => setUnitForm({ ...unitForm, airbase_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                >
+                  <option value="">Belum ditempatkan</option>
+                  {airbases.map((base) => (
+                    <option key={base.id} value={base.id}>{base.name} - {base.location || 'Lokasi tidak tersedia'}</option>
+                  ))}
                 </select>
               </div>
 

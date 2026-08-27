@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { airbaseAPI } from '../api';
+import { airbaseAPI, aircraftAPI } from '../api';
 
 const emptyForm = {
   id: null,
@@ -18,6 +18,7 @@ const emptyForm = {
 
 export default function Pangkalan() {
   const [airbases, setAirbases] = useState([]);
+  const [aircraftUnits, setAircraftUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -27,9 +28,13 @@ export default function Pangkalan() {
   const loadAirbases = async () => {
     try {
       setError(null);
-      const response = await airbaseAPI.getAll();
-      const data = response?.data ?? response ?? [];
+      const [airbaseResponse, aircraftResponse] = await Promise.all([
+        airbaseAPI.getAll(),
+        aircraftAPI.getUnits(),
+      ]);
+      const data = airbaseResponse?.data ?? airbaseResponse ?? [];
       setAirbases(Array.isArray(data) ? data : []);
+      setAircraftUnits(Array.isArray(aircraftResponse?.data) ? aircraftResponse.data : []);
     } catch (error) {
       console.error('Error loading airbases:', error);
       setError('Gagal memuat data pangkalan. Pastikan backend sudah berjalan di port 8000.');
@@ -138,6 +143,7 @@ export default function Pangkalan() {
   const totalApronCapacity = airbases.reduce((sum, base) => sum + (Number(base.apron_capacity_aircraft || 0)), 0);
   const totalApronUsed = airbases.reduce((sum, base) => sum + (Number(base.apron_used || 0)), 0);
   const apronUtilization = totalApronCapacity > 0 ? Math.round((totalApronUsed / totalApronCapacity) * 100) : 0;
+  const totalStationedAircraft = aircraftUnits.filter((unit) => unit.airbase_id != null).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -164,7 +170,7 @@ export default function Pangkalan() {
               <div>
                 <div className="text-sm opacity-90">Total Pangkalan</div>
                 <div className="text-3xl font-bold mt-2">{airbases.length}</div>
-                <div className="text-xs opacity-75 mt-2">Lanud aktif dalam sistem</div>
+                <div className="text-xs opacity-75 mt-2">{totalStationedAircraft} pesawat memiliki penempatan</div>
               </div>
             </div>
           </div>
@@ -275,90 +281,59 @@ export default function Pangkalan() {
         ) : airbases.length === 0 ? (
           <div className="text-center py-12 text-slate-500">Belum ada data pangkalan. Klik tombol tambah untuk membuat data baru.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {airbases.map((base) => {
-              const avturPercent = Number(base.avtur_capacity_liters || 0)
-                ? (Number(base.avtur_stock_liters || 0) / Number(base.avtur_capacity_liters || 1)) * 100
-                : 0;
-              const apronPercent = Number(base.apron_capacity_aircraft || 0)
-                ? (Number(base.apron_used || 0) / Number(base.apron_capacity_aircraft || 1)) * 100
-                : 0;
-              const badge = getStatusBadge(base.status || 'optimal');
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px]">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Pangkalan</th>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Status</th>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Pesawat Ditempatkan</th>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Stok Avtur</th>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Truk Aktif</th>
+                    <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Apron</th>
+                    <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {airbases.map((base) => {
+                    const avturPercent = Number(base.avtur_capacity_liters || 0)
+                      ? (Number(base.avtur_stock_liters || 0) / Number(base.avtur_capacity_liters || 1)) * 100
+                      : 0;
+                    const stationedAircraft = aircraftUnits.filter((unit) => String(unit.airbase_id) === String(base.id));
+                    const badge = getStatusBadge(base.status || 'optimal');
 
-              return (
-                <div key={base.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                  <div className="flex justify-between items-start gap-3 mb-5">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-blue-600">{base.location || 'Lokasi belum diisi'}</div>
-                      <h3 className="text-xl font-bold text-slate-900 mt-1">{base.name}</h3>
-                    </div>
-                    <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${badge.color}`}>
-                      {badge.text}
-                    </span>
-                  </div>
-
-                  <div className="space-y-5">
-                    <div>
-                      <div className="flex justify-between text-sm text-slate-600 mb-2">
-                        <span>Avtur</span>
-                        <span>{avturPercent.toFixed(0)}%</span>
-                      </div>
-                      <div className="h-2.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
-                          style={{ width: `${Math.min(avturPercent, 100)}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-right text-xs text-slate-500 mt-1">
-                        {Number(base.avtur_stock_liters || 0).toLocaleString()} / {Number(base.avtur_capacity_liters || 0).toLocaleString()} L
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="bg-slate-50 rounded-lg p-3">
-                        <div className="text-slate-500">Truk Avtur</div>
-                        <div className="font-bold text-slate-900">{base.refueler_trucks_active || 0}/{base.refueler_trucks_count || 0}</div>
-                      </div>
-                      <div className="bg-slate-50 rounded-lg p-3">
-                        <div className="text-slate-500">Forklift</div>
-                        <div className="font-bold text-slate-900">{base.forklifts_count || 0}</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-sm text-slate-600 mb-2">
-                        <span>Apron</span>
-                        <span>{apronPercent.toFixed(0)}%</span>
-                      </div>
-                      <div className="h-2.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-500"
-                          style={{ width: `${Math.min(apronPercent, 100)}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-right text-xs text-slate-500 mt-1">
-                        {base.apron_used || 0}/{base.apron_capacity_aircraft || 0} bay
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex justify-end gap-2">
-                    <button
-                      onClick={() => openForm(base)}
-                      className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteBase(base.id)}
-                      className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                    return (
+                      <tr key={base.id} className="hover:bg-blue-50/40 transition">
+                        <td className="px-5 py-4">
+                          <div className="font-bold text-slate-900">{base.name}</div>
+                          <div className="text-xs text-slate-500">{base.location || 'Lokasi belum diisi'}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${badge.color}`}>{badge.text}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="font-bold text-slate-900">{stationedAircraft.length}</div>
+                          <div className="text-xs text-slate-500">dari {base.apron_capacity_aircraft || 0} kapasitas apron</div>
+                        </td>
+                        <td className="px-5 py-4 min-w-[160px]">
+                          <div className="flex justify-between text-sm text-slate-700 mb-1"><span>{avturPercent.toFixed(0)}%</span><span>{(Number(base.avtur_stock_liters || 0) / 1000).toFixed(0)}K L</span></div>
+                          <div className="h-2 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${Math.min(avturPercent, 100)}%` }} /></div>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-slate-700">{base.refueler_trucks_active || 0} / {base.refueler_trucks_count || 0}</td>
+                        <td className="px-5 py-4 text-sm text-slate-700">{base.apron_used || 0} / {base.apron_capacity_aircraft || 0} bay</td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => openForm(base)} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100">Edit</button>
+                            <button onClick={() => deleteBase(base.id)} className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100">Hapus</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

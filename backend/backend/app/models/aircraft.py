@@ -27,7 +27,9 @@ class AircraftUnit(Base):
     status = Column(SQLAlchemyEnum(AircraftStatus), default=AircraftStatus.READY, nullable=False)
     
     aircraft_type_id = Column(Integer, ForeignKey("aircraft_types.id"))
+    airbase_id = Column(Integer, ForeignKey("air_bases.id"), nullable=True, index=True)
     
     # Relationships
     aircraft_type = relationship("AircraftType", back_populates="units")
+    airbase = relationship("AirBase", back_populates="aircraft_units")
     deployments = relationship("ScenarioDeployment", back_populates="aircraft")

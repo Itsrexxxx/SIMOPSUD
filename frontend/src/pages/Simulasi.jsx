@@ -14,7 +14,6 @@ export default function Simulasi() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-  const [downloadUrl, setDownloadUrl] = useState('');
   const [automaticPrediction, setAutomaticPrediction] = useState(null);
   const [predictionLoading, setPredictionLoading] = useState(true);
   const [predictionError, setPredictionError] = useState('');
@@ -63,7 +62,6 @@ export default function Simulasi() {
     setError('');
     setRunning(true);
     setResult(null);
-    setDownloadUrl('');
     try {
       const res = await scenarioAPI.runSimulation({
         scenario_id: parseInt(form.scenario_id),
@@ -72,9 +70,6 @@ export default function Simulasi() {
         daily_flight_hours_per_aircraft: parseFloat(form.daily_flight_hours_per_aircraft),
       });
       setResult(res.data);
-      if (res.data.pdf_download_url) {
-        setDownloadUrl(`http://localhost:8000${res.data.pdf_download_url}`);
-      }
     } catch (e) {
       setError('Simulasi gagal: ' + (e.response?.data?.detail || e.message));
     }
@@ -205,7 +200,7 @@ export default function Simulasi() {
                       <tr key={item.airbase_id}>
                         <td className="font-bold">{item.airbase_name}</td>
                         <td className="text-mono">{Number(item.probability_critical_percent || 0).toFixed(1)}%</td>
-                        <td className="text-muted text-sm">{item.available_trucks} truk · {item.available_forklifts} forklift · estimasi {item.deployed_aircraft} pesawat</td>
+                        <td className="text-muted text-sm">{item.available_trucks} truk · {item.available_forklifts} forklift · {item.deployed_aircraft} pesawat</td>
                         <td><span className={`badge ${item.is_critical ? 'badge-kritis' : 'badge-aman'}`}>{item.is_critical ? 'KRITIS' : 'AMAN'}</span></td>
                         <td className="text-muted text-sm">{item.mitigations?.[0] || '-'}</td>
                       </tr>
@@ -231,7 +226,7 @@ export default function Simulasi() {
 
       <div className="section-heading" style={{ marginBottom: 12 }}>
         <h2>Simulasi Skenario Manual</h2>
-        <p>Gunakan fitur ini untuk menguji rencana pengerahan tertentu dan membuat laporan PDF.</p>
+        <p>Gunakan fitur ini untuk menguji rencana pengerahan tertentu dan menganalisis dampaknya secara langsung.</p>
       </div>
 
       <div className={`simulation-layout${result ? ' wide' : ''}`}>
@@ -342,6 +337,12 @@ export default function Simulasi() {
                   <div className="card-title">Statistik Hasil Prediksi Skenario</div>
                   <div className="text-muted text-sm" style={{ marginTop: 4 }}>Ringkasan dampak pengerahan yang baru saja dianalisis oleh model.</div>
                 </div>
+                <div className="form-label" style={{ marginTop: 16 }}>Kontribusi Fitur Model</div>
+                <div className="metric-list">
+                  {Object.entries(automaticPrediction.feature_importance || {}).map(([feature, importance]) => (
+                    <div key={feature}><span>{feature}</span><strong>{(Number(importance) * 100).toFixed(1)}%</strong></div>
+                  ))}
+                </div>
               </div>
               <div className="summary-grid">
                 <div className="summary-stat">
@@ -449,13 +450,6 @@ export default function Simulasi() {
                   </tbody>
                 </table>
               </div>
-            )}
-
-            {/* Download PDF */}
-            {downloadUrl && (
-              <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-lg w-full btn-full">
-                Unduh Laporan PDF — Analisa Prediktif SIMKO
-              </a>
             )}
           </div>
         )}

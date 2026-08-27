@@ -72,3 +72,16 @@ class SupervisedLearningEngine:
             "is_critical": bool(is_critical),
             "mitigations": mitigations
         }
+
+    def get_feature_importance(self) -> dict:
+        """Return model feature weights for transparent analysis in the thesis."""
+        feature_names = [
+            "Rata-rata jam terbang",
+            "Jumlah truk refueler",
+            "Jumlah forklift",
+            "Jumlah pesawat ditempatkan",
+        ]
+        return {
+            name: round(float(importance), 4)
+            for name, importance in zip(feature_names, self.model.feature_importances_)
+        }

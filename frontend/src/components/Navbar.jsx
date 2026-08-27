@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
+import { NavLink } from 'react-router-dom';
 
 export default function Navbar() {
-  const { user, getInitials } = useUser();
+  const { user, getInitials, logout } = useUser();
   const [clock, setClock] = useState({ time: '--:--', date: '' });
 
   useEffect(() => {
@@ -26,9 +27,12 @@ export default function Navbar() {
   // Get role display name
   const getRoleDisplay = (role) => {
     const roleMap = {
-      'Administrator': 'System Administrator',
-      'Analyst': 'AI Analyst / Operator',
-      'Executive': 'Commander / Executive',
+      'Admin': 'Administrator Sistem',
+      'Administrator': 'Administrator Sistem',
+      'Operator': 'Operator Sistem',
+      'Analyst': 'Operator Sistem',
+      'Pimpinan': 'Pimpinan / Commander',
+      'Executive': 'Pimpinan / Commander',
     };
     return roleMap[role] || role || 'Officer';
   };
@@ -66,6 +70,8 @@ export default function Navbar() {
             )}
           </div>
         </div>
+        <NavLink className="navbar-link" to="/profile">Profil</NavLink>
+        <button type="button" className="navbar-link" onClick={logout}>Keluar</button>
       </div>
     </nav>
   );

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useUser } from '../context/UserContext';
 
 const menuItems = [
   { path: '/', icon: 'dashboard', label: 'Dashboard Utama', section: 'OPERASI' },
@@ -6,11 +7,26 @@ const menuItems = [
   { path: '/pangkalan', icon: 'location_on', label: 'Pangkalan & Logistik', section: 'DATA OPERASI' },
   { path: '/skenario', icon: 'timeline', label: 'Skenario Operasi', section: 'ANALISIS' },
   { path: '/simulasi', icon: 'psychology', label: 'AI Prediksi Otomatis', section: 'ANALISIS' },
-  { path: '/laporan', icon: 'report_problem', label: 'Laporan Mitigasi', section: 'LAPORAN' },
+  { path: '/users', icon: 'manage_accounts', label: 'Manajemen Pengguna', section: 'ADMINISTRASI' },
 ];
 
+const permissionByPath = {
+  '/': 'dashboard',
+  '/pesawat': 'aircraft',
+  '/pangkalan': 'airbase',
+  '/skenario': 'scenarios',
+  '/simulasi': 'ai',
+  '/users': 'users',
+};
+
 export default function Sidebar() {
+  const { user } = useUser();
   let lastSection = '';
+  const visibleItems = menuItems.filter((item) => {
+    if (['Admin', 'Administrator'].includes(user?.role)) return true;
+    if (user?.permissions?.length) return user.permissions.includes(permissionByPath[item.path]);
+    return user?.role !== 'Executive' || !['/pesawat', '/pangkalan'].includes(item.path);
+  });
 
   return (
     <aside className="sidebar">
@@ -27,7 +43,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {menuItems.map((item) => {
+        {visibleItems.map((item) => {
           const showSection = item.section !== lastSection;
           if (showSection) lastSection = item.section;
           return (

@@ -7,7 +7,7 @@ Roles:
 - "Executive" (Commander/Viewer): Read-only access to reports and dashboards
 """
 
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, Index
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Index, JSON
 from sqlalchemy.sql import func
 from app.models.base import Base
 
@@ -39,6 +39,7 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(150), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=True)
     
     # Military Identity
     nip = Column(String(50), unique=True, index=True, nullable=False)
@@ -46,6 +47,7 @@ class User(Base):
     
     # Access Control & Approval
     role = Column(String(50), default="Analyst", nullable=False)
+    permissions = Column(JSON, nullable=True, default=list)
     is_approved = Column(Boolean, default=False, nullable=False, index=True)
     
     # Timestamps

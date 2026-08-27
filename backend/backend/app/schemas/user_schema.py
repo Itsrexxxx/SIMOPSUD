@@ -7,7 +7,7 @@ Provides strict type validation for:
 - API responses and data serialization
 """
 
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=150, description="Full name")
     nip: str = Field(..., min_length=1, max_length=50, description="Military ID/Personnel Number")
     service_unit: str = Field(..., min_length=1, max_length=100, description="Military unit/division")
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class UserCreate(UserBase):
@@ -31,12 +32,24 @@ class UserAdminUpdate(BaseModel):
     
     role: Optional[str] = Field(
         None, 
-        description="User role: 'Administrator', 'Analyst', or 'Executive'"
+        description="User role: 'Admin', 'Operator', or 'Pimpinan'"
     )
     is_approved: Optional[bool] = Field(
         None, 
         description="Approval status"
     )
+    service_unit: Optional[str] = Field(None, min_length=1, max_length=100)
+    permissions: Optional[List[str]] = None
+
+class UserAdminCreate(UserCreate):
+    role: str = "Operator"
+    permissions: List[str] = []
+    is_approved: bool = True
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=150)
+    email: Optional[str] = Field(None, max_length=255)
+    service_unit: Optional[str] = Field(None, min_length=1, max_length=100)
 
 
 class UserOut(UserBase):
@@ -47,6 +60,7 @@ class UserOut(UserBase):
     id: int = Field(..., description="User ID")
     role: str = Field(..., description="User role")
     is_approved: bool = Field(..., description="Approval status")
+    permissions: List[str] = []
 
 
 class UserApprovalResponse(BaseModel):
@@ -60,6 +74,8 @@ class UserApprovalResponse(BaseModel):
     nip: str
     role: str
     is_approved: bool
+    service_unit: str
+    permissions: List[str] = []
     message: str = Field(default="User successfully updated")
 
 
@@ -68,3 +84,19 @@ class PendingUsersResponse(BaseModel):
     
     total: int = Field(..., description="Total pending users")
     pending_users: list[UserOut] = Field(..., description="List of pending users")
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+class ForgotPasswordRequest(BaseModel):
+    username_or_email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=255)

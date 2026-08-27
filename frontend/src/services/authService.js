@@ -129,12 +129,38 @@ export const authService = {
       throw error.response?.data || { message: 'Password change failed' };
     }
   },
+
+  forgotPassword: async (usernameOrEmail) => {
+    try {
+      const response = await apiClient.post('/auth/forgot-password', { username_or_email: usernameOrEmail });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Password reset request failed' };
+    }
+  },
+
+  resetPassword: async (token, newPassword) => {
+    try {
+      const response = await apiClient.post('/auth/reset-password', { token, new_password: newPassword });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Password reset failed' };
+    }
+  },
 };
 
 /**
  * User Admin Service - Admin-only operations
  */
 export const userAdminService = {
+  createUser: async (userData) => {
+    try {
+      const response = await apiClient.post('/users/', userData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to create user' };
+    }
+  },
   /**
    * Get pending user registrations
    */

@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List
@@ -13,7 +12,6 @@ from app.schemas.scenario_schema import (
     ScenarioDeploymentCreate, ScenarioDeploymentResponse
 )
 from app.services.simulation_engine import SimulationEngine
-from app.services.pdf_generator import PDFGenerator
 
 router = APIRouter()
 
@@ -31,25 +29,28 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     engine = SimulationEngine(db=db)
     airbase_predictions = []
     for airbase in airbases:
-        # Aircraft-to-airbase assignment is not modeled yet; occupied apron bays
-        # provide the closest current proxy for each base's operational load.
-        estimated_deployed_aircraft = min(
-            len(ready_aircraft),
-            max(int(airbase.apron_used or 0), 0),
+        assigned_ready_aircraft = [
+            aircraft for aircraft in airbase.aircraft_units
+            if aircraft.status == AircraftStatus.READY
+        ]
+        deployed_aircraft = len(assigned_ready_aircraft)
+        airbase_average_flight_hours = (
+            sum(float(aircraft.accumulated_flight_hours or 0) for aircraft in assigned_ready_aircraft) / deployed_aircraft
+            if deployed_aircraft else 0
         )
         prediction = engine.ai_engine.predict_bottleneck(
-            flight_hours=average_flight_hours,
+            flight_hours=airbase_average_flight_hours,
             available_trucks=int(airbase.refueler_trucks_active or airbase.refueler_trucks_count or 0),
             available_forklifts=int(airbase.forklifts_count or 0),
-            deployed_aircraft=estimated_deployed_aircraft,
+            deployed_aircraft=deployed_aircraft,
         )
         airbase_predictions.append({
             "airbase_id": airbase.id,
             "airbase_name": airbase.name,
             "available_trucks": int(airbase.refueler_trucks_active or airbase.refueler_trucks_count or 0),
             "available_forklifts": int(airbase.forklifts_count or 0),
-            "deployed_aircraft": estimated_deployed_aircraft,
-            "average_flight_hours": round(average_flight_hours, 2),
+            "deployed_aircraft": deployed_aircraft,
+            "average_flight_hours": round(airbase_average_flight_hours, 2),
             **prediction,
         })
 
@@ -61,7 +62,7 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model_status": "active",
-        "prediction_source": "Data aktual armada dan pangkalan dari database SIMKO",
+        "prediction_source": "Data aktual armada dan pangkalan dari database SIMKO; jumlah pesawat dihitung dari airbase_id",
         "training_source": "Data referensi sintetis untuk baseline model",
         "model_name": "Random Forest Classifier",
         "prediction_target": "Risiko bottleneck operasional (Aman atau Kritis)",
@@ -69,8 +70,9 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
             "Rata-rata jam terbang",
             "Jumlah truk refueler aktif",
             "Jumlah forklift",
-            "Jumlah pesawat siap operasi",
+            "Jumlah pesawat siap operasi per Lanud",
         ],
+        "feature_importance": engine.ai_engine.get_feature_importance(),
         "aircraft_count": len(aircraft_units),
         "ready_aircraft_count": len(ready_aircraft),
         "average_flight_hours": round(average_flight_hours, 2),
@@ -85,14 +87,13 @@ class SimulationRequest(BaseModel):
     airbase_id: int
     daily_flight_hours_per_aircraft: float
 
-@router.post("/run-simulation", response_class=StreamingResponse)
-def run_simulation_and_get_pdf(request: SimulationRequest, db: Session = Depends(get_db)):
+@router.post("/run-simulation")
+def run_simulation(request: SimulationRequest, db: Session = Depends(get_db)):
     """
     Mengeksekusi mesin simulasi operasi untuk skenario tertentu 
-    dan langsung mengembalikan hasilnya sebagai unduhan file PDF.
+    dan mengembalikan hasil analisa simulasi dan AI secara langsung.
     """
     engine = SimulationEngine(db=db)
-    pdf_gen = PDFGenerator()
     
     try:
         # Eksekusi logika Engine
@@ -104,14 +105,7 @@ def run_simulation_and_get_pdf(request: SimulationRequest, db: Session = Depends
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
         
-    # Generate file PDF
-    pdf_buffer = pdf_gen.generate_simulation_report(result)
-    
-    # Return file stream ke user
-    response = StreamingResponse(pdf_buffer, media_type="application/pdf")
-    response.headers["Content-Disposition"] = f"attachment; filename=Laporan_Simulasi_Skenario_{request.scenario_id}.pdf"
-    
-    return response
+    return result
 
 # --- Basic Scenario CRUD ---
 @router.post("/", response_model=OperationsScenarioResponse)

@@ -24,6 +24,7 @@ class AircraftUnitBase(BaseModel):
     accumulated_flight_hours: Optional[float] = 0.0
     status: Optional[AircraftStatus] = AircraftStatus.READY
     aircraft_type_id: int
+    airbase_id: Optional[int] = None
 
 class AircraftUnitCreate(AircraftUnitBase):
     pass
@@ -33,10 +34,18 @@ class AircraftUnitUpdate(BaseModel):
     accumulated_flight_hours: Optional[float] = None
     status: Optional[AircraftStatus] = None
     aircraft_type_id: Optional[int] = None
+    airbase_id: Optional[int] = None
 
 class AircraftUnitResponse(AircraftUnitBase):
     id: int
     aircraft_type: Optional[AircraftTypeResponse] = None
+    airbase: Optional["AirBaseSummary"] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class AirBaseSummary(BaseModel):
+    id: int
+    name: str
+    location: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 class AircraftTypeWithUnitsResponse(AircraftTypeResponse):

@@ -9,3 +9,5 @@ reportlab==4.0.9
 scikit-learn==1.4.0
 numpy==1.26.4
 pandas==2.2.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4

@@ -1,20 +1,26 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
+import { useUser } from '../context/UserContext';
 
 export default function Login() {
-  const [form, setForm] = useState({ username: '', password: '', role: '' });
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useUser();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setError('');
     try {
-      // TODO: panggil API login jika backend auth tersedia
+      const response = await authService.login(form.username, form.password);
+      login(response.user, response.access_token);
       navigate('/');
     } catch (error) {
-      alert('Gagal masuk. Periksa kembali username dan password.');
+      setError(error.detail || error.message || 'Gagal masuk. Periksa kembali username dan password.');
     }
     setLoading(false);
   };
@@ -25,14 +31,18 @@ export default function Login() {
         {/* Header */}
         <div className="auth-header">
           <div className="auth-crest">
-            <img src="/tni-au-logo.svg" alt="TNI AU Crest" />
+            <img src="/logo_au.png" alt="TNI AU Crest" />
           </div>
           <h1 className="auth-title">SIMKO - TNI AU</h1>
-          <p className="auth-subtitle">Sistem Analisa Prediktif Titik Kritis Operasi Udara</p>
+          <p className="auth-subtitle">Sistem Analisa Prediktif Operasi Udara</p>
         </div>
 
         {/* Form */}
         <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="auth-form-intro">
+            <strong>Masuk ke sistem</strong>
+            <span>Gunakan username atau NIP yang telah terdaftar.</span>
+          </div>
           {/* Username Input */}
           <div className="auth-input-group">
             <span className="material-symbols-outlined auth-input-icon">person</span>
@@ -67,23 +77,7 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Role Dropdown */}
-          <div className="auth-input-group">
-            <span className="material-symbols-outlined auth-input-icon">admin_panel_settings</span>
-            <select
-              value={form.role}
-              onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-              required
-            >
-              <option value="">Pilih Hak Akses</option>
-              <option value="administrator">Administrator</option>
-              <option value="analyst">Analyst</option>
-              <option value="executive">Executive</option>
-            </select>
-            <span className="auth-input-icon-right dropdown-arrow">
-              <span className="material-symbols-outlined">arrow_drop_down</span>
-            </span>
-          </div>
+          {error && <div className="error-box">{error}</div>}
 
           {/* Submit Button */}
           <button type="submit" className="auth-submit-btn" disabled={loading}>
@@ -93,7 +87,9 @@ export default function Login() {
 
         {/* Footer */}
         <div className="auth-footer">
-          <NavLink to="/register">Belum terdaftar? Ajukan Registrasi Perwira Baru</NavLink>
+          <NavLink to="/forgot-password">Lupa password?</NavLink>
+          <span className="auth-footer-divider" />
+          <NavLink to="/register">Ajukan registrasi akun baru</NavLink>
         </div>
 
         {/* Bottom Bar */}

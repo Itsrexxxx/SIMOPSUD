@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 export default function Register() {
-  const [form, setForm] = useState({ nip: '', username: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ nip: '', username: '', email: '', full_name: '', service_unit: '', password: '', confirmPassword: '' });
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -15,11 +17,19 @@ export default function Register() {
       return;
     }
     setLoading(true);
+    setError('');
     try {
-      // TODO: panggil API registrasi jika backend auth tersedia
+      await authService.register({
+        nip: form.nip,
+        username: form.username,
+        email: form.email,
+        full_name: form.full_name,
+        service_unit: form.service_unit,
+        password: form.password,
+      });
       navigate('/login');
     } catch (error) {
-      alert('Gagal membuat akun. Periksa kembali data yang dimasukkan.');
+      setError(error.detail || error.message || 'Gagal membuat akun.');
     }
     setLoading(false);
   };
@@ -60,6 +70,16 @@ export default function Register() {
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               required
             />
+          </div>
+
+          <div className="auth-input-group">
+            <span className="material-symbols-outlined auth-input-icon">badge</span>
+            <input type="text" placeholder="Nama Lengkap" value={form.full_name} onChange={(e) => setForm((prev) => ({ ...prev, full_name: e.target.value }))} required />
+          </div>
+
+          <div className="auth-input-group">
+            <span className="material-symbols-outlined auth-input-icon">account_balance</span>
+            <input type="text" placeholder="Satuan Kerja" value={form.service_unit} onChange={(e) => setForm((prev) => ({ ...prev, service_unit: e.target.value }))} required />
           </div>
 
           {/* Email Input */}
@@ -117,6 +137,8 @@ export default function Register() {
               </span>
             </button>
           </div>
+
+          {error && <div className="error-box">{error}</div>}
 
           {/* Submit Button */}
           <button type="submit" className="auth-submit-btn" disabled={loading}>

@@ -13,20 +13,24 @@ All endpoints require Administrator role (verified via dependency).
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.api.deps import require_roles
+from app.models.user import User
 from app.crud import crud_user
 from app.schemas.user_schema import (
     UserOut,
+    UserAdminCreate,
     UserAdminUpdate,
     UserApprovalResponse,
     PendingUsersResponse,
 )
+from app.core.security import hash_password
 
 
 # ============================================================================
 # DEPENDENCY: Mock Super Admin Verification (Placeholder for JWT/Auth)
 # ============================================================================
 
-def verify_super_admin(current_user: dict = Depends(lambda: {"role": "Administrator"})) -> dict:
+def verify_super_admin(current_user=Depends(require_roles("Admin", "Administrator"))):
     """
     Verify that the current user has Administrator role.
     
@@ -44,11 +48,6 @@ def verify_super_admin(current_user: dict = Depends(lambda: {"role": "Administra
     Raises:
         HTTPException 403: If user is not an Administrator
     """
-    if current_user.get("role") != "Administrator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Administrators can perform this action."
-        )
     return current_user
 
 
@@ -57,7 +56,7 @@ def verify_super_admin(current_user: dict = Depends(lambda: {"role": "Administra
 # ============================================================================
 
 router = APIRouter(
-    prefix="/api/v1/users",
+    prefix="",
     tags=["users"],
     responses={
         403: {"description": "Insufficient permissions"},
@@ -69,6 +68,33 @@ router = APIRouter(
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
+ALLOWED_ROLES = {"Admin", "Operator", "Pimpinan", "Administrator", "Analyst", "Executive"}
+ALLOWED_PERMISSIONS = {"dashboard", "aircraft", "airbase", "scenarios", "ai", "reports", "users"}
+
+@router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def create_user_by_admin(
+    item: UserAdminCreate,
+    db: Session = Depends(get_db),
+    _: object = Depends(verify_super_admin),
+):
+    if item.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=422, detail="Role tidak valid")
+    invalid_permissions = set(item.permissions) - ALLOWED_PERMISSIONS
+    if invalid_permissions:
+        raise HTTPException(status_code=422, detail=f"Hak akses tidak valid: {', '.join(invalid_permissions)}")
+    if db.query(User).filter(User.username == item.username).first():
+        raise HTTPException(status_code=409, detail="Username sudah terdaftar")
+    user = User(
+        username=item.username, full_name=item.full_name, nip=item.nip,
+        email=item.email, service_unit=item.service_unit, role=item.role,
+        permissions=item.permissions, is_approved=item.is_approved,
+        hashed_password=hash_password(item.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 @router.get(
     "/pending",
@@ -177,6 +203,12 @@ def approve_and_assign_role(
         HTTPException 403: If user is not an Administrator
         HTTPException 404: If user with user_id does not exist
     """
+    allowed_roles = ALLOWED_ROLES
+    if obj_in.role is not None and obj_in.role not in allowed_roles:
+        raise HTTPException(status_code=422, detail="Role tidak valid")
+    if obj_in.permissions is not None and set(obj_in.permissions) - ALLOWED_PERMISSIONS:
+        raise HTTPException(status_code=422, detail="Hak akses tidak valid")
+
     db_user = crud_user.update_user_by_admin(db, user_id=user_id, obj_in=obj_in)
     
     if not db_user:
@@ -200,6 +232,8 @@ def approve_and_assign_role(
         nip=db_user.nip,
         role=db_user.role,
         is_approved=db_user.is_approved,
+        service_unit=db_user.service_unit,
+        permissions=db_user.permissions or [],
         message=approval_message,
     )
 
