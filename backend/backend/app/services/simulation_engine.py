@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
-from app.models.aircraft import AircraftUnit, AircraftStatus
+from app.models.aircraft import AircraftUnit
 from app.models.airbase import AirBase
 from app.models.scenario import OperationsScenario
 from app.services.predictive_model import SupervisedLearningEngine
@@ -65,8 +65,8 @@ class SimulationEngine:
         grounded_aircraft = []
         for unit in aircraft_units:
             if unit.accumulated_flight_hours >= self.max_safe_flight_hours:
-                if unit.status != AircraftStatus.MANDATORY_GROUNDING:
-                    unit.status = AircraftStatus.MANDATORY_GROUNDING
+                if unit.status != "U/S":
+                    unit.status = "U/S"
                     grounded_aircraft.append(unit)
                     
         if grounded_aircraft:

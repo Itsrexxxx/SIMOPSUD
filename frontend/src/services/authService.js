@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -22,16 +22,31 @@ apiClient.interceptors.request.use(
 );
 
 /**
- * Handle responses and errors
+ * Handle responses and errors — sliding refresh: coba refresh sebelum paksa logout
  */
+let _refreshing = null;
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && original && !original._retry) {
+      original._retry = true;
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          if (!_refreshing) _refreshing = apiClient.post('/auth/refresh').then((r) => r.data).finally(() => { _refreshing = null; });
+          const data = await _refreshing;
+          if (data?.access_token) {
+            localStorage.setItem('token', data.access_token);
+            if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
+            original.headers.Authorization = `Bearer ${data.access_token}`;
+            return apiClient(original);
+          }
+        } catch {}
+      }
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
     return Promise.reject(error);
   }
@@ -164,26 +179,34 @@ export const userAdminService = {
   /**
    * Get pending user registrations
    */
-  getPendingUsers: async (skip = 0, limit = 100) => {
+  getPendingUsers: async (params = {}) => {
+    const skip = params.skip ?? 0;
+    const limit = params.limit ?? 20;
+    const q = params.q ?? undefined;
     try {
-      const response = await apiClient.get('/users/pending', {
-        params: { skip, limit },
-      });
-      return response.data;
+      const response = await apiClient.get('/users/pending', { params: { skip, limit, q } });
+      const total = Number(response.headers?.['x-total-count'] ?? response.headers?.['X-Total-Count'] ?? 0);
+      return { data: response.data, total, headers: response.headers };
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch pending users' };
     }
   },
 
   /**
-   * Get all users (admin only)
+   * Get all users (admin only) — supports {skip,limit,q} or legacy (skip,limit)
    */
-  getAllUsers: async (skip = 0, limit = 100) => {
+  getAllUsers: async (...args) => {
+    let params = {};
+    if (args.length === 1 && typeof args[0] === 'object') params = args[0];
+    else { params.skip = args[0] ?? 0; params.limit = args[1] ?? 20; if (args[2]) params.q = args[2]; }
+    const { skip = 0, limit = 20, q } = params;
     try {
-      const response = await apiClient.get('/users/all', {
-        params: { skip, limit },
-      });
-      return response.data;
+      const response = await apiClient.get('/users/all', { params: { skip, limit, q: q || undefined } });
+      const total = Number(response.headers?.['x-total-count'] ?? response.headers?.['X-Total-Count'] ?? (Array.isArray(response.data) ? response.data.length : 0));
+      // keep backward compat: if caller expects array, attach total as property
+      const data = response.data;
+      if (Array.isArray(data)) { data._total = total; data._headers = response.headers; }
+      return response.headers?.['x-total-count'] ? { data, total, headers: response.headers } : data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch users' };
     }

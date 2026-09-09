@@ -1,0 +1,43 @@
+id,icao,iata,code,name,location,kodau,tipe,lat,lon,runway_m,elev_m,avtur_capacity_liters,apron_capacity,status
+1,WIHH,HLP,HLM,Lanud Halim Perdanakusuma,"Jakarta Timur, DKI Jakarta",Kodau I,A,-6.2644,106.8958,3000,25,1200000,30,optimal
+2,WIAJ,,ATS,Lanud Atang Sendjaja,"Kemang, Bogor, Jawa Barat",Kodau I,A,-6.5497,106.7511,1400,164,180000,12,optimal
+3,WIHK,,SDM,Lanud Suryadarma,"Kalijati, Subang, Jawa Barat",Kodau I,A,-6.5314,107.6592,1600,110,220000,14,optimal
+4,WIBB,PKU,RSN,Lanud Roesmin Nurjadin,"Pekanbaru, Riau",Kodau I,A,0.4616,101.4461,2600,31,750000,18,optimal
+5,WIOO,PNK,SPO,Lanud Supadio,"Kubu Raya, Pontianak, Kalimantan Barat",Kodau I,A,-0.1502,109.4041,2250,3,600000,16,optimal
+6,WION,NTX,RSA,Lanud Raden Sadjad,"Ranai, Natuna, Kepulauan Riau",Kodau I,B,3.9413,108.3916,2560,2,350000,10,warning
+7,WICC,BDO,HSN,Lanud Husein Sastranegara,"Bandung, Jawa Barat",Kodau I,B,-6.9005,107.5763,2249,743,400000,12,optimal
+8,WIMK,MES,SWD,Lanud Soewondo,"Medan, Sumatra Utara",Kodau I,B,3.5577,98.6713,2900,28,450000,14,optimal
+9,WITT,BTJ,SIM,Lanud Sultan Iskandar Muda,"Blang Bintang, Aceh Besar, Aceh",Kodau I,B,5.5233,95.4202,3000,20,420000,12,optimal
+10,WIMG,,SSR,Lanud Sutan Sjahrir,"Tabing, Padang, Sumatra Barat",Kodau I,B,-0.9186,100.3536,2150,3,280000,10,optimal
+11,WIDN,TNJ,RHF,Lanud Raja Haji Fisabilillah,"Tanjungpinang, Kepulauan Riau",Kodau I,B,0.9231,104.5306,2250,16,300000,10,optimal
+12,WIPP,PLM,SMH,Lanud Sri Mulyono Herlambang,"Palembang, Sumatra Selatan",Kodau I,B,-2.8986,104.7019,3000,11,480000,14,optimal
+13,WITN,SBG,MMS,Lanud Maimun Saleh,"Sabang, Aceh",Kodau I,C,5.8725,95.3397,1850,126,90000,6,warning
+14,WIOD,TJQ,HAS,Lanud H.A.S. Hanandjoeddin,"Tanjung Pandan, Belitung, Bangka Belitung",Kodau I,C,-2.7455,107.755,2500,50,160000,8,optimal
+15,WIAG,AKQ,PBY,Lanud Pangeran M. Bun Yamin,"Menggala, Tulang Bawang, Lampung",Kodau I,C,-4.5016,105.195,1600,19,80000,6,warning
+16,WICM,TSY,WRD,Lanud Wiriadinata,"Cibeureum, Tasikmalaya, Jawa Barat",Kodau I,C,-7.3561,108.2469,1600,352,70000,6,optimal
+17,,,SGS,Lanud Sugiri Sukani,"Jatiwangi, Majalengka, Jawa Barat",Kodau I,C,-6.6686,108.2186,1200,50,40000,4,warning
+18,WAOI,PKN,ISK,Lanud Iskandar,"Pangkalan Bun, Kotawaringin Barat, Kalimantan Tengah",Kodau I,C,-2.705,111.6733,1650,75,120000,6,warning
+19,,,HHD,Lanud Harry Hadisoemantri,"Bange, Sanggau Ledo, Bengkayang, Kalimantan Barat",Kodau I,C,0.9466,109.6533,900,45,35000,4,critical
+20,WIDD,BTH,HNDM,Lanud Hang Nadim,"Batam, Kepulauan Riau",Kodau I,C,1.1208,104.1186,4025,38,500000,16,optimal
+21,WAAA,UPG,HND,Lanud Sultan Hasanuddin,"Maros, Makassar, Sulawesi Selatan",Kodau II,A,-5.0755,119.5537,3100,14,900000,20,optimal
+22,WIAR,,IWJ,Lanud Iswahjudi,"Maospati, Magetan, Jawa Timur",Kodau II,A,-7.6158,111.434,2500,110,850000,24,optimal
+23,WARA,MLG,ABD,Lanud Abdulrachman Saleh,"Pakis, Malang, Jawa Timur",Kodau II,A,-7.9263,112.7147,2000,526,500000,14,warning
+24,WAHH,JOG,ADI,Lanud Adisutjipto,"Sleman, D.I. Yogyakarta",Kodau II,A,-7.788,110.4316,2200,107,380000,16,optimal
+25,WARQ,SOC,ASM,Lanud Adi Soemarmo,"Colomadu, Karanganyar, Jawa Tengah",Kodau II,A,-7.5161,110.7569,2600,128,420000,16,optimal
+26,WAMM,MDC,SRR,Lanud Sam Ratulangi,"Manado, Sulawesi Utara",Kodau II,A,1.5491,124.9263,2650,80,550000,14,optimal
+27,WATT,KOE,ELT,Lanud El Tari,"Kupang, Nusa Tenggara Timur",Kodau II,A,-10.1725,123.6711,2500,102,400000,12,optimal
+28,WALK,TRK,TAR,Lanud Anang Busra,"Tarakan, Kalimantan Utara",Kodau II,A,3.3244,117.5675,1850,6,250000,8,critical
+29,WALL,BPN,DMB,Lanud Dhomber,"Balikpapan, Kalimantan Timur",Kodau II,A,-1.2686,116.8944,2500,12,520000,14,optimal
+30,WAWW,KDI,HLO,Lanud Haluoleo,"Konawe Selatan, Kendari, Sulawesi Tenggara",Kodau II,A,-4.0827,122.4213,2500,164,320000,10,optimal
+31,WADD,DPS,IGR,Lanud I Gusti Ngurah Rai,"Badung, Bali",Kodau II,A,-8.748,115.1675,3000,4,800000,20,optimal
+32,WARR,SUB,MUL,Lanud Muljono,"Sedati, Sidoarjo, Jawa Timur",Kodau II,B,-7.3791,112.7802,3000,9,600000,18,optimal
+33,WAOO,BDJ,SJN,Lanud Sjamsudin Noor,"Landasan Ulin, Banjarbaru, Kalimantan Selatan",Kodau II,B,-3.4422,114.7616,2500,20,350000,12,optimal
+34,WADL,LOP,ZAM,Lanud TGKH. M. Zainuddin Abdul Madjid,"Rembiga / Praya, Lombok, Nusa Tenggara Barat",Kodau II,B,-8.5583,116.0925,2750,97,380000,12,optimal
+35,WIBY,,SLM,Lanud Sulaiman,"Margahayu, Bandung, Jawa Barat",Kodau II,A,-6.9836,107.5922,2249,683,150000,8,optimal
+36,WABB,BIK,MNH,Lanud Manuhua,"Biak Numfor, Papua",Kodau III,A,-1.19,136.1075,3570,11,700000,16,optimal
+37,WAJJ,DJJ,SLP,Lanud Silas Papare,"Sentani, Jayapura, Papua",Kodau III,A,-2.5766,140.5166,3000,88,550000,14,optimal
+38,WAKK,MKQ,JAD,Lanud Johannes Abraham Dimara,"Merauke, Papua Selatan",Kodau III,B,-8.5202,140.4172,1850,3,220000,8,warning
+39,WAPP,AMQ,PTM,Lanud Pattimura,"Ambon, Maluku",Kodau III,B,-3.7105,128.0894,2500,10,300000,10,optimal
+40,WAMR,OTI,LWM,Lanud Leo Wattimena,"Pitu, Pulau Morotai, Maluku Utara",Kodau III,B,2.0455,128.3294,2400,15,180000,8,warning
+41,WAYY,TIM,YKP,Lanud Yohanis Kapiyau,"Timika, Mimika, Papua Tengah",Kodau III,B,-4.5291,136.8858,2500,103,240000,8,optimal
+42,WAPL,LUV,DMT,Lanud Dominicus Dumatubun,"Langgur, Maluku Tenggara, Maluku",Kodau III,C,-5.66,132.7302,1650,3,90000,6,warning

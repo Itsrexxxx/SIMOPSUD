@@ -1,0 +1,4 @@
+id,status_code,description,is_operational
+1,Ready,Siap operasi,True
+2,Maintenance,Perawatan terjadwal / unscheduled,False
+3,Mandatory Grounding,Grounded — inspeksi wajib / AOG,False

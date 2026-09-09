@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List
 from app.core.database import get_db
 from app.models.scenario import OperationsScenario, ScenarioDeployment
-from app.models.aircraft import AircraftUnit, AircraftStatus
+from app.models.aircraft import AircraftUnit
 from app.models.airbase import AirBase
 from app.schemas.scenario_schema import (
     OperationsScenarioCreate, OperationsScenarioResponse, 
@@ -20,7 +20,7 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     """Calculate current operational risk without requiring a scenario run."""
     aircraft_units = db.query(AircraftUnit).all()
     airbases = db.query(AirBase).all()
-    ready_aircraft = [unit for unit in aircraft_units if unit.status == AircraftStatus.READY]
+    ready_aircraft = [unit for unit in aircraft_units if unit.status == "S"]
     average_flight_hours = (
         sum(float(unit.accumulated_flight_hours or 0) for unit in aircraft_units) / len(aircraft_units)
         if aircraft_units else 0
@@ -31,7 +31,7 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     for airbase in airbases:
         assigned_ready_aircraft = [
             aircraft for aircraft in airbase.aircraft_units
-            if aircraft.status == AircraftStatus.READY
+            if aircraft.status == "S"
         ]
         deployed_aircraft = len(assigned_ready_aircraft)
         airbase_average_flight_hours = (

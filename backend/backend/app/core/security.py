@@ -35,3 +35,16 @@ def decode_token(token: str) -> dict[str, Any]:
 		return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
 	except JWTError as exc:
 		raise ValueError("Invalid or expired token") from exc
+
+
+def is_token_expiring_soon(token: str, threshold_minutes: int = 60) -> bool:
+	"""True jika token akan kedaluwarsa dalam threshold menit — dipakai sliding refresh."""
+	try:
+		payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
+		exp_ts = payload.get("exp")
+		if exp_ts is None:
+			return False
+		exp = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+		return (exp - datetime.now(timezone.utc)).total_seconds() < threshold_minutes * 60
+	except Exception:
+		return False

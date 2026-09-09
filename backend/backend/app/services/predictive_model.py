@@ -1,41 +1,61 @@
+import logging
+from pathlib import Path
+
+import joblib
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
+logger = logging.getLogger(__name__)
+
+_MODEL_DIR = Path(__file__).resolve().parent / "_models"
+
+
 class SupervisedLearningEngine:
     def __init__(self):
-        # Menginisiasi model Random Forest Classifier
+        self.model = None
+        self.model_source = "dummy"
+        self._load_or_train()
+
+    def _load_or_train(self):
+        p = _MODEL_DIR / "bottleneck_rf.joblib"
+        if p.exists():
+            try:
+                self.model = joblib.load(p)
+                self.model_source = "joblib:bottleneck_rf.joblib"
+                logger.info("Bottleneck model loaded from %s", p)
+                return
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Gagal load %s: %s — fallback dummy", p, e)
         self.model = RandomForestClassifier(n_estimators=100, random_state=42)
         self._train_dummy_model()
+        self.model_source = "dummy:10-row"
 
     def _train_dummy_model(self):
         """
-        Melakukan proses training model AI dengan dataset dummy historis.
+        Fallback 10 baris. Dipakai hanya jika joblib tidak ada.
         Fitur: [jam_terbang, jumlah_truk, jumlah_forklift, pesawat_dikerahkan]
         Target: 0 (Aman), 1 (Kritis / Bottleneck)
         """
-        # Dataset dummy yang merepresentasikan historis operasi
         X_train = np.array([
-            [100, 5, 2, 4],  # Aman
-            [350, 1, 1, 4],  # Kritis (jam terbang tinggi, dukungan logistik rendah)
-            [50,  10, 5, 2], # Aman
-            [400, 2, 1, 8],  # Kritis 
-            [200, 4, 3, 4],  # Aman
-            [300, 2, 1, 5],  # Kritis
-            [150, 6, 4, 3],  # Aman
-            [320, 3, 2, 6],  # Kritis
-            [280, 5, 3, 4],  # Aman
-            [310, 2, 1, 6],  # Kritis
+            [100, 5, 2, 4],
+            [350, 1, 1, 4],
+            [50,  10, 5, 2],
+            [400, 2, 1, 8],
+            [200, 4, 3, 4],
+            [300, 2, 1, 5],
+            [150, 6, 4, 3],
+            [320, 3, 2, 6],
+            [280, 5, 3, 4],
+            [310, 2, 1, 6],
         ])
-        
         y_train = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
-        
-        # Proses Supervised Learning Training
         self.model.fit(X_train, y_train)
 
     def predict_bottleneck(self, flight_hours: float, available_trucks: int, available_forklifts: int, deployed_aircraft: int) -> dict:
         """
         Memprediksi probabilitas terjadinya hambatan (bottleneck) 
         serta memberikan rekomendasi Mitigasi Hambatan.
+        Model joblib dilatih dari notebooks/data/bottleneck_train.csv (800 baris Kodau I-III).
         """
         if deployed_aircraft <= 0:
             return {

@@ -10,7 +10,7 @@ Endpoints for:
 All endpoints require Administrator role (verified via dependency).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Query, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.deps import require_roles
@@ -103,8 +103,10 @@ def create_user_by_admin(
     description="Retrieve all users awaiting administrator approval."
 )
 def get_pending_registrations(
+    response: Response,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = Query(default=20, le=100),
+    q: str | None = None,
     db: Session = Depends(get_db),
     _: dict = Depends(verify_super_admin),
 ) -> PendingUsersResponse:
@@ -125,8 +127,9 @@ def get_pending_registrations(
     Raises:
         HTTPException 403: If user is not an Administrator
     """
-    pending_users = crud_user.get_pending_users(db, skip=skip, limit=limit)
-    total_pending = crud_user.count_pending_users(db)
+    pending_users = crud_user.get_pending_users(db, skip=skip, limit=limit, q=q)
+    total_pending = crud_user.count_pending_users(db, q=q)
+    response.headers["X-Total-Count"] = str(total_pending)
     
     return PendingUsersResponse(
         total=total_pending,
@@ -141,8 +144,10 @@ def get_pending_registrations(
     description="Retrieve all registered users in the system."
 )
 def get_all_users_endpoint(
+    response: Response,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = Query(default=20, le=100),
+    q: str | None = None,
     db: Session = Depends(get_db),
     _: dict = Depends(verify_super_admin),
 ) -> list[UserOut]:
@@ -163,7 +168,9 @@ def get_all_users_endpoint(
     Raises:
         HTTPException 403: If user is not an Administrator
     """
-    users = crud_user.get_all_users(db, skip=skip, limit=limit)
+    users = crud_user.get_all_users(db, skip=skip, limit=limit, q=q)
+    total = crud_user.count_all_users(db, q=q)
+    response.headers["X-Total-Count"] = str(total)
     return users
 
 

@@ -1,0 +1,31 @@
+id,tail_number,type_name,type_key,squadron,homebase_code,cruise_speed_kmh,burn_lph,status,accumulated_flight_hours,min_runway_m,homebase_id
+1,TS-1601,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Ready,145.5,1800,22
+2,TS-1602,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Ready,180.0,1800,22
+3,TS-1603,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Ready,240.2,1800,22
+4,TS-1604,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Ready,285.0,1800,22
+5,TS-1605,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Maintenance,195.0,1800,22
+6,TS-1606,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 3,IWJ,850,3200,Mandatory Grounding,305.5,1800,22
+7,TS-1610,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 16,RSN,850,3200,Ready,110.0,1800,4
+8,TS-1611,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 16,RSN,850,3200,Ready,165.5,1800,4
+9,TS-1612,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 16,RSN,850,3200,Ready,220.0,1800,4
+10,TS-1614,F-16C/D Fighting Falcon Block 52ID,f-16,Skadron Udara 16,RSN,850,3200,Ready,290.0,1800,4
+11,TS-2701,Sukhoi Su-27SKM / Su-30MK2 Flanker,sukhoi,Skadron Udara 11,HND,900,4500,Ready,125.0,1800,21
+12,TS-2702,Sukhoi Su-27SKM / Su-30MK2 Flanker,sukhoi,Skadron Udara 11,HND,900,4500,Ready,190.5,1800,21
+13,TS-3001,Sukhoi Su-27SKM / Su-30MK2 Flanker,sukhoi,Skadron Udara 11,HND,900,4500,Ready,150.0,1800,21
+14,TS-3002,Sukhoi Su-27SKM / Su-30MK2 Flanker,sukhoi,Skadron Udara 11,HND,900,4500,Ready,275.0,1800,21
+15,TS-3003,Sukhoi Su-27SKM / Su-30MK2 Flanker,sukhoi,Skadron Udara 11,HND,900,4500,Mandatory Grounding,312.0,1800,21
+16,TT-5001,T-50i Golden Eagle,t-50i,Skadron Udara 15,IWJ,750,1800,Ready,95.0,1400,22
+17,TT-5002,T-50i Golden Eagle,t-50i,Skadron Udara 15,IWJ,750,1800,Ready,130.0,1400,22
+18,TT-5003,T-50i Golden Eagle,t-50i,Skadron Udara 15,IWJ,750,1800,Ready,210.0,1400,22
+19,TT-5005,T-50i Golden Eagle,t-50i,Skadron Udara 15,IWJ,750,1800,Maintenance,185.0,1400,22
+20,A-1339,C-130J-30 Super Hercules,c-130,Skadron Udara 31,HLM,540,2800,Ready,140.0,1600,1
+21,A-1340,C-130J-30 Super Hercules,c-130,Skadron Udara 31,HLM,540,2800,Ready,175.0,1600,1
+22,A-1341,C-130J-30 Super Hercules,c-130,Skadron Udara 31,HLM,540,2800,Ready,230.5,1600,1
+23,A-1342,C-130J-30 Super Hercules,c-130,Skadron Udara 31,HLM,540,2800,Ready,85.0,1600,1
+24,AI-7301,Boeing 737-2X9 Surveiller,boeing,Skadron Udara 5,HND,780,2600,Ready,160.0,2000,21
+25,AI-7302,Boeing 737-2X9 Surveiller,boeing,Skadron Udara 5,HND,780,2600,Ready,215.0,2000,21
+26,AI-7303,Boeing 737-2X9 Surveiller,boeing,Skadron Udara 5,HND,780,2600,Ready,260.0,2000,21
+27,TT-3101,EMB-314 Super Tucano,tucano,Skadron Udara 21,ABD,480,280,Ready,115.0,900,23
+28,TT-3102,EMB-314 Super Tucano,tucano,Skadron Udara 21,ABD,480,280,Ready,170.0,900,23
+29,TT-3103,EMB-314 Super Tucano,tucano,Skadron Udara 21,ABD,480,280,Ready,225.0,900,23
+30,TT-3104,EMB-314 Super Tucano,tucano,Skadron Udara 21,ABD,480,280,Ready,288.0,900,23

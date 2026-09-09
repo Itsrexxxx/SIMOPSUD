@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -7,11 +7,12 @@ from app.core.database import get_db
 from app.core.security import create_access_token, create_reset_token, decode_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.user_schema import ForgotPasswordRequest, LoginRequest, ProfileUpdate, ResetPasswordRequest, TokenResponse, UserCreate, UserOut
+from app.services.audit_service import log_audit
 
 router = APIRouter()
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(item: UserCreate, db: Session = Depends(get_db)):
+def register(item: UserCreate, request: Request, db: Session = Depends(get_db)):
 	duplicate = db.query(User).filter(or_(User.username == item.username, User.nip == item.nip, User.email == item.email)).first()
 	if duplicate:
 		raise HTTPException(status_code=409, detail="Username, NIP, atau email sudah terdaftar")
@@ -19,31 +20,40 @@ def register(item: UserCreate, db: Session = Depends(get_db)):
 	db.add(user)
 	db.commit()
 	db.refresh(user)
+	log_audit(db, user=user, action="CREATE", resource_type="user", resource_id=user.id, detail=f"Registrasi {user.username}", request=request)
 	return user
 
 @router.post("/login", response_model=TokenResponse)
-def login(item: LoginRequest, db: Session = Depends(get_db)):
+def login(item: LoginRequest, request: Request, db: Session = Depends(get_db)):
 	user = db.query(User).filter(or_(User.username == item.username, User.nip == item.username)).first()
 	if not user or not verify_password(item.password, user.hashed_password):
 		raise HTTPException(status_code=401, detail="Username/NIP atau password salah")
 	if not user.is_approved:
 		raise HTTPException(status_code=403, detail="Akun belum disetujui Administrator")
+	log_audit(db, user=user, action="LOGIN", resource_type="auth", detail=f"Login {user.username}", request=request)
 	return TokenResponse(access_token=create_access_token(str(user.id), user.role), user=user)
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(current_user: User = Depends(get_current_user)):
+	"""Sliding session — perpanjang token selama user aktif. Dipanggil otomatis oleh frontend sebelum kedaluwarsa."""
+	return TokenResponse(access_token=create_access_token(str(current_user.id), current_user.role), user=current_user)
 
 @router.get("/me", response_model=UserOut)
 def current_user(current_user: User = Depends(get_current_user)):
 	return current_user
 
 @router.put("/profile", response_model=UserOut)
-def update_profile(item: ProfileUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_profile(item: ProfileUpdate, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 	for field, value in item.model_dump(exclude_unset=True).items():
 		setattr(current_user, field, value)
 	db.commit()
 	db.refresh(current_user)
+	log_audit(db, user=current_user, action="UPDATE", resource_type="user", resource_id=current_user.id, detail=f"Update profil {current_user.username}", request=request)
 	return current_user
 
 @router.post("/logout")
-def logout(current_user: User = Depends(get_current_user)):
+def logout(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+	log_audit(db, user=current_user, action="LOGOUT", resource_type="auth", detail=f"Logout {current_user.username}", request=request)
 	return {"message": "Logout berhasil"}
 
 @router.post("/forgot-password")

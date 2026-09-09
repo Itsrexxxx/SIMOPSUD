@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Aplikasi SIMKO"
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 jam kerja — sliding via /auth/refresh, tidak logout saat aktif (ponytail: refresh token httpOnly when SSO tersedia)
+    AUDIT_RETENTION_DAYS: int = 365
+    DEFAULT_KLASIFIKASI: str = "Terbuka"  # Terbuka/Terbatas/Rahasia
     
     # Database configuration
     MYSQL_SERVER: str = "localhost"

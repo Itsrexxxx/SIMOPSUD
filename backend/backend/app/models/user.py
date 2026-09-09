@@ -7,9 +7,15 @@ Roles:
 - "Executive" (Commander/Viewer): Read-only access to reports and dashboards
 """
 
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, Index, JSON
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Index, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import Base
+
+
+ROLE_ADMIN = "Administrator"
+ROLE_ANALYST = "Analyst"
+ROLE_EXECUTIVE = "Executive"
 
 
 class User(Base):
@@ -49,11 +55,15 @@ class User(Base):
     role = Column(String(50), default="Analyst", nullable=False)
     permissions = Column(JSON, nullable=True, default=list)
     is_approved = Column(Boolean, default=False, nullable=False, index=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     approved_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    approver = relationship("User", remote_side=[id], foreign_keys=[approved_by])
     
     # Composite indexes for performance
     __table_args__ = (

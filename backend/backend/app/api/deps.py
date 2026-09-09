@@ -28,3 +28,14 @@ def require_roles(*roles: str):
 			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Anda tidak memiliki hak akses untuk tindakan ini")
 		return current_user
 	return dependency
+
+
+def require_permissions(*permissions: str):
+	def dependency(current_user=Depends(get_current_user)):
+		if current_user.role in {"Administrator", "Admin"}:
+			return current_user
+		user_permissions = set(current_user.permissions or [])
+		if not set(permissions).issubset(user_permissions):
+			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Anda tidak memiliki hak akses untuk modul ini")
+		return current_user
+	return dependency
