@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useUser } from '../context/UserContext';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function Login() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -28,6 +29,7 @@ export default function Login() {
   return (
     <div className="auth-page auth-page--ultra">
       <div className="auth-minimal">
+        <div className="absolute right-4 top-4"><ThemeToggle /></div>
         <div className="auth-minimal__brand" aria-label="SIMOPSUD">
           <div className="auth-minimal__crest"><img src="/logo_au.png" alt="TNI AU" /></div>
           <div className="auth-minimal__word">

@@ -78,7 +78,7 @@ export function Modal({ title, onClose, children, footer }) {
 export function EmptyState({ icon = '—', title, desc }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl" aria-hidden="true">{icon}</div>
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl border text-xl" style={{ borderColor: 'var(--card-border)', color: 'var(--text-muted)' }} aria-hidden="true">{icon}</div>
       <div className="mt-3 text-sm font-bold text-slate-900">{title}</div>
       {desc && <div className="mt-1 max-w-md text-sm text-slate-600">{desc}</div>}
     </div>

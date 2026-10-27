@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { NavLink } from 'react-router-dom';
 import { Modal } from './UI';
+import ThemeToggle from './ThemeToggle';
 
 export default function Navbar({ onMenuToggle }) {
   const { user, getInitials, logout } = useUser();
@@ -43,7 +44,7 @@ export default function Navbar({ onMenuToggle }) {
       <nav className="navbar" aria-label="Bar atas">
         <div className="navbar-left">
           {onMenuToggle && (
-            <button type="button" aria-label="Buka menu" onClick={onMenuToggle} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden">
+            <button type="button" aria-label="Buka menu" onClick={onMenuToggle} className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden">
               <span className="material-symbols-outlined" aria-hidden="true">menu</span>
             </button>
           )}
@@ -58,6 +59,7 @@ export default function Navbar({ onMenuToggle }) {
         </div>
 
         <div className="navbar-right">
+          <ThemeToggle />
           <button type="button" className="icon-button" aria-label="Notifikasi">
             <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
             <span className="notification-dot" aria-hidden="true" />

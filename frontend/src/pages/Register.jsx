@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function Register() {
   const [form, setForm] = useState({ nip: '', username: '', email: '', full_name: '', service_unit: '', password: '', confirmPassword: '' });
@@ -25,6 +26,7 @@ export default function Register() {
   return (
     <div className="auth-page auth-page--ultra">
       <div className="auth-minimal auth-minimal--wide">
+        <div className="absolute right-4 top-4"><ThemeToggle /></div>
         <div className="auth-minimal__brand">
           <div className="auth-minimal__crest"><img src="/logo_au.png" alt="TNI AU" /></div>
           <div className="auth-minimal__word">

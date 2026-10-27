@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
   timeout: 30000,
 });
 
@@ -24,7 +25,7 @@ api.interceptors.response.use(
     const original = error.config;
     if (error.response?.status === 401 && original && !original._retry && typeof window !== 'undefined') {
       const token = window.localStorage.getItem('token');
-      if (token && original.url !== '/auth/refresh') {
+      if (token && original.url !== '/auth/refresh' && !original.url?.endsWith('/auth/login')) {
         original._retry = true;
         try {
           if (!_apiRefreshing) _apiRefreshing = api.post('/auth/refresh').then((r) => r.data).finally(() => { _apiRefreshing = null; });
@@ -54,6 +55,14 @@ export function extractTotal(response, fallbackData = []) {
   return 0;
 }
 
+export const dashboardAPI = {
+  getSummary: () => api.get('/dashboard/summary'),
+};
+
+export const situationalOverviewAPI = {
+  getTracks: (params = {}) => api.get('/situational-overview/tracks', { params }),
+};
+
 export const aircraftAPI = {
   getTypes: (params = {}) => api.get('/aircraft/types/', { params }),
   createType: (data) => api.post('/aircraft/types/', data),
@@ -75,6 +84,11 @@ export const airbaseAPI = {
   create: (data) => api.post('/airbase/', data),
   update: (id, data) => api.patch(`/airbase/${id}`, data),
   delete: (id) => api.delete(`/airbase/${id}`),
+  readinessHistory: (id, params = {}) => api.get(`/airbase-data/${id}/readiness-history`, { params }),
+  updateReadiness: (id, data) => api.post(`/airbase-data/${id}/readiness`, data),
+  previewImport: (file) => { const data = new FormData(); data.append('file', file); return api.post('/airbase-data/import/preview', data); },
+  commitImport: (batchId) => api.post(`/airbase-data/import/${batchId}/commit`),
+  rollbackImport: (batchId) => api.post(`/airbase-data/import/${batchId}/rollback`),
 };
 
 export const flightMissionAPI = {
@@ -84,6 +98,7 @@ export const flightMissionAPI = {
   getById: (id) => api.get(`/flight-missions/${id}`),
   update: (id, data) => api.put(`/flight-missions/${id}`, data),
   updateStatus: (id, data) => api.patch(`/flight-missions/${id}/status`, data),
+  approve: (id, data = {}) => api.post(`/flight-missions/${id}/approve`, data),
   delete: (id) => api.delete(`/flight-missions/${id}`),
 };
 

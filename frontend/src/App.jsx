@@ -20,6 +20,7 @@ const MisiPenerbangan = lazy(() => import('./pages/MisiPenerbangan'));
 const Users = lazy(() => import('./pages/Users'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AuditTrail = lazy(() => import('./pages/AuditTrail'));
+const SituationalOverview = lazy(() => import('./pages/SituationalOverview'));
 
 function isAdmin(user) {
   return ['Admin', 'Administrator'].includes(user?.role);
@@ -74,6 +75,7 @@ function MainLayout() {
             <Route path="/tipe-pesawat" element={<PermissionRoute permission="aircraft"><TipePesawat /></PermissionRoute>} />
             <Route path="/pangkalan" element={<PermissionRoute permission="airbase"><Pangkalan /></PermissionRoute>} />
             <Route path="/misi-penerbangan" element={<PermissionRoute permission="missions"><MisiPenerbangan /></PermissionRoute>} />
+            <Route path="/situational-overview" element={<PermissionRoute permission="dashboard"><SituationalOverview /></PermissionRoute>} />
             <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />

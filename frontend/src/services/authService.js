@@ -4,6 +4,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const apiClient = axios.create({
   baseURL: API_BASE,
+  withCredentials: true,
   timeout: 10000,
 });
 
@@ -29,7 +30,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && original && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry && !original.url?.endsWith('/auth/login') && !original.url?.endsWith('/auth/refresh')) {
       original._retry = true;
       const token = localStorage.getItem('token');
       if (token) {

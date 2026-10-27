@@ -88,7 +88,7 @@ export default function AuditTrail(){
             <div className="py-12 text-center text-sm text-slate-500">Belum ada jejak audit.</div>
           ) : (
             <>
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto table-wrap">
                 <table className="w-full min-w-[900px]">
                   <thead className="bg-slate-50 border-b"><tr>
                     <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-600">Waktu</th>

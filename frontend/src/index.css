@@ -66,6 +66,63 @@
 
   --font-main: 'Hanken Grotesk', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* chart grid + muted surface for schedule cards */
+  --chart-grid: #e2e8f0;
+  --surface-muted: #f1f5f9;
+  --surface-container-low: #f8fafc;
+  --error-container: #fee2e2;
+  --radius-md: 0.75rem;
+}
+
+/* === Dark theme — follows system, toggled via html.dark (HIG: semantic tokens, not inversions) === */
+html.dark {
+  --surface: #070e1f;
+  --surface-dim: #0b1430;
+  --surface-bright: #111e36;
+  --surface-container: #162544;
+  --surface-container-high: #1a2d4d;
+  --surface-container-highest: #1e3458;
+  --surface-container-low: #0f1c32;
+  --surface-muted: #0f1c32;
+  --on-surface: #e2e8f0;
+  --on-surface-variant: #cbd5e1;
+  --outline: #334155;
+  --outline-variant: #1e293b;
+  --surface-tint: #90a8ff;
+  --primary: #90a8ff;
+  --on-primary: #0b1220;
+  --primary-container: #1e3a8a;
+  --on-primary-container: #bfc9ff;
+  --inverse-primary: #4059aa;
+  --secondary: #5bb8fe;
+  --on-secondary: #001a2e;
+  --secondary-container: #00476e;
+  --on-secondary-container: #bae6fd;
+  --tertiary: #87b2c8;
+  --tertiary-container: #164558;
+  --on-tertiary-container: #cce8f5;
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #3a0a0a;
+  --border-soft: #1e3a5f;
+  --header-navy: #0f172a;
+  --status-aman-bg: rgba(34, 197, 94, 0.18);
+  --status-kritis-bg: rgba(239, 68, 68, 0.18);
+  --status-waspada-bg: rgba(249, 115, 22, 0.18);
+  --status-grounding-bg: rgba(56, 189, 248, 0.16);
+  --background: #060f1e;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --card-bg: #111e36;
+  --card-border: #1e3a5f;
+  --input-bg: #0f1c32;
+  --input-border: #1e3a5f;
+  /* panels sit on the ground: borders carry the edge, shadows only for real overlays */
+  --shadow: none;
+  --shadow-soft: none;
+  --chart-grid: #1e3a5f;
 }
 
 * {
@@ -91,6 +148,14 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+
+/* KPI strip + chart: pakai token agar ikut dark mode */
+.divide-\[var\(--card-border\)\] > :not([hidden]) ~ :not([hidden]) { border-color: var(--card-border); }
+@media (max-width: 640px) {
+  .page-container { padding: 16px; }
+  .recharts-wrapper { font-size: 11px; }
 }
 
 /* === LAYOUT === */
@@ -328,7 +393,17 @@ textarea {
 
 .profile-meta {
   text-align: right;
-  min-width: 150px;
+  min-width: 0;
+}
+
+/* narrow screens: name/role live in the avatar's title, the chip keeps the row from overflowing */
+@media (max-width: 767px) {
+  .profile-meta {
+    display: none;
+  }
+  .navbar-right {
+    gap: 8px;
+  }
 }
 
 .profile-name {
@@ -355,7 +430,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: var(--primary-container);
   flex-shrink: 0;
 }
 
@@ -375,7 +450,7 @@ textarea {
   font-size: 0.9rem;
   font-weight: 700;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: var(--primary-container);
   letter-spacing: 0.05em;
 }
 
@@ -438,7 +513,7 @@ textarea {
 .sidebar-header {
   padding: 24px 20px;
   border-bottom: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, #eaf4ff 0%, var(--surface-container) 100%);
+  background: var(--surface-container-low);
 }
 
 .sidebar-logo {
@@ -457,7 +532,6 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -477,10 +551,9 @@ textarea {
 }
 
 .logo-text-sub {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   margin-top: 2px;
 }
 
@@ -491,8 +564,8 @@ textarea {
 }
 
 .nav-section-label {
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
   color: var(--text-secondary);
   text-transform: uppercase;
   padding: 14px 24px 8px;
@@ -625,7 +698,7 @@ textarea {
 .legend-warning { background: var(--status-warning); }
 .legend-optimal { background: var(--status-optimal); }
 .risk-map-body { position:relative; height:100%; min-height:360px; background: var(--surface-container-low); }
-.map-canvas { width:100%; height:100%; background-image: url('/map-placeholder.jpg'); background-size:cover; background-position:center; }
+.map-canvas { width:100%; height:100%; background: var(--surface-container-low); }
 .map-pin { position:absolute; width:16px; height:16px; border-radius:50%; border:2px solid #fff; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
 .map-pin.critical { background: var(--status-critical); }
 .map-pin.warning { background: var(--status-warning); }
@@ -2512,6 +2585,7 @@ textarea {
   background: #f8fafc;
 }
 .auth-minimal {
+  position: relative;
   width: 100%;
   max-width: 420px;
   display: flex;
@@ -2602,5 +2676,112 @@ textarea {
   .auth-page--ultra .auth-card { border-radius: 16px; }
   .auth-page--ultra .auth-card__header { padding: 22px 20px 0; }
   .auth-page--ultra .auth-form { padding: 18px 20px 22px; }
+}
+
+/* === Dark: auth minimal + Tailwind utility shims (HIG: elevated surfaces, 4.5:1) === */
+html.dark .auth-page--ultra { background: #060f1e; }
+html.dark .auth-minimal__crest { background: var(--card-bg); border-color: var(--card-border); }
+html.dark .auth-minimal__logo { color: var(--text-primary); }
+html.dark .auth-minimal__kicker { color: var(--text-muted); }
+html.dark .auth-minimal__sub { color: var(--text-secondary); }
+html.dark .auth-page--ultra .auth-card { background: var(--card-bg); border-color: var(--card-border); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html.dark .auth-card__title { color: var(--text-primary); }
+html.dark .auth-card__subtitle { color: var(--text-secondary); }
+html.dark .auth-label { color: var(--text-secondary); }
+html.dark .auth-link-inline { color: var(--text-secondary); }
+html.dark .auth-link-inline:hover { color: var(--text-primary); }
+html.dark .auth-page--ultra .auth-input-group input { background: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+html.dark .auth-page--ultra .auth-input-group input::placeholder { color: #64748b; }
+html.dark .auth-page--ultra .auth-input-group input:focus { border-color: #5bb8fe; box-shadow: 0 0 0 3px rgba(91,184,254,0.18); background: var(--input-bg); }
+html.dark .auth-input-icon { color: #64748b; }
+html.dark .auth-alert--error { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.28); color: #fecaca; }
+html.dark .auth-alert--success { background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.28); color: #bbf7d0; }
+html.dark .auth-footer-inline { color: var(--text-secondary); }
+html.dark .auth-link { color: var(--text-primary); border-bottom-color: var(--card-border); }
+html.dark .auth-minimal__foot { color: var(--text-muted); }
+html.dark .auth-divider { color: var(--text-muted); }
+html.dark .auth-divider::before, html.dark .auth-divider::after { background: var(--card-border); }
+
+/* Tailwind surface shims — keep diff minimal vs 353 hardcoded utilities */
+html.dark .bg-white { background-color: var(--card-bg) !important; }
+html.dark .bg-slate-50 { background-color: var(--surface-muted) !important; }
+/* hover slate-50 = kilatan putih di baris tabel gelap */
+html.dark .hover\:bg-slate-50:hover { background-color: var(--surface-muted); }
+html.dark .bg-slate-100 { background-color: var(--surface-container) !important; }
+html.dark .border-slate-200 { border-color: var(--card-border) !important; }
+html.dark .border-slate-300 { border-color: var(--outline) !important; }
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--card-border) !important; }
+/* Tailwind divide-x/y tanpa kelas warna mewarisi default #e5e7eb — terlalu terang di atas card gelap */
+html.dark .divide-x > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--card-border); }
+html.dark .text-slate-900 { color: var(--text-primary) !important; }
+html.dark .text-slate-800 { color: var(--text-primary) !important; }
+html.dark .text-slate-700 { color: var(--text-secondary) !important; }
+html.dark .text-slate-600 { color: var(--text-secondary) !important; }
+html.dark .text-slate-500 { color: var(--text-muted) !important; }
+html.dark .hover\:bg-slate-50:hover { background-color: var(--surface-container) !important; }
+html.dark .hover\:bg-slate-100:hover { background-color: var(--surface-container-high) !important; }
+/* cards/dividers already var-based — these catch PageShell/KPI shells */
+html.dark .shadow-sm { box-shadow: var(--shadow) !important; }
+
+/* Recharts grid — tokenized, fallback CSS override for hardcoded stroke="#e2e8f0" */
+html.dark .recharts-cartesian-grid-horizontal line,
+html.dark .recharts-cartesian-grid-vertical line { stroke: var(--chart-grid) !important; }
+html.dark .recharts-text.recharts-label,
+html.dark .recharts-legend-item-text { fill: var(--text-muted) !important; color: var(--text-muted) !important; }
+html.dark input,
+html.dark select,
+html.dark textarea { color-scheme: dark; }
+
+/* === Responsive polish — mobile friendly === */
+/* Drawer breakpoint aligned to hamburger lg (1024px), not 639px — HIG: avoid hidden nav dead-zone 640-1023 */
+@media (max-width: 1023px) {
+  .sidebar { position: fixed; left: -100%; width: 280px; max-width: 86vw; transition: left 0.28s ease; z-index: 300; box-shadow: 0 16px 40px rgba(0,0,0,0.18); }
+  .sidebar.open { left: 0; }
+  .main-content { margin-left: 0 !important; }
+  .navbar { left: 0 !important; right: 0; }
+}
+@media (min-width: 1024px) {
+  .sidebar { left: 0 !important; }
+}
+/* Table horizontal affordance + safe padding on narrow */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.table-wrap table { min-width: 720px; }
+@media (max-width: 640px) {
+  .table-wrap table { min-width: 640px; }
+  .page-container { padding-left: 14px; padding-right: 14px; }
+  .card, .kpi-card { padding: 14px; }
+}
+/* Filters/action bar wrap — prevents overflow on 360px */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filter-bar input, .filter-bar select { min-width: 0; flex: 1 1 160px; }
+/* Modal safe on small viewport */
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 10px; align-items: flex-end; }
+  .user-create-modal { width: 100%; max-height: calc(100dvh - 16px); border-radius: 16px 16px 0 0; }
+}
+
+html.dark .navbar { background: rgba(17, 30, 54, 0.96) !important; border-bottom-color: var(--card-border) !important; }
+html.dark .sidebar { background: var(--surface-container) !important; border-right-color: var(--card-border) !important; }
+html.dark .sidebar-header { background: var(--surface-container-low) !important; border-bottom-color: var(--card-border) !important; }
+html.dark .sidebar-footer { background: var(--surface-container-highest) !important; border-top-color: var(--card-border) !important; }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2.25rem; min-height: 2.25rem; border-radius: 0.5rem;
+  border: 1px solid var(--card-border); background: transparent; color: var(--text-secondary);
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--text-primary) 7%, transparent); color: var(--text-primary); }
+.icon-btn .material-symbols-outlined { font-size: 18px; }
+.icon-btn--strong { color: var(--text-primary); border-color: color-mix(in srgb, var(--text-primary) 28%, transparent); }
+.icon-btn--danger { color: color-mix(in srgb, var(--status-kritis) 82%, #ffffff); border-color: color-mix(in srgb, var(--status-kritis) 40%, transparent); }
+.icon-btn--danger:hover { background: var(--status-kritis-bg); color: var(--status-kritis); }
+
+/* Tap target ≥44px on mobile lists — HIG Accessibility */
+@media (max-width: 640px) {
+  .nav-item { min-height: 44px; }
+  button, [role="button"] { min-height: 0; }
+  .icon-button, .navbar-link, .icon-btn { min-height: 44px; min-width: 44px; }
 }
 

@@ -3,7 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('simopsud-theme');
+          if (t !== 'dark' && t !== 'light') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          if (t === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {}
+      })();
+    </script>
     <meta name="description" content="SIMOPSUD — Sistem Informasi Manajemen Operasi Penerbangan Udara TNI AU berbasis AI Supervised Learning" />
     <title>SIMOPSUD — Sistem Informasi Manajemen Operasi Penerbangan Udara TNI AU</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">

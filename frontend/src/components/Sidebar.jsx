@@ -8,6 +8,7 @@ const menuItems = [
   { path: '/tipe-pesawat', icon: 'category', label: 'Tipe Pesawat', section: 'DATA OPERASI' },
   { path: '/pangkalan', icon: 'location_on', label: 'Pangkalan & Logistik', section: 'DATA OPERASI' },
   { path: '/misi-penerbangan', icon: 'flight_takeoff', label: 'Prediksi ETA & Misi', section: 'OPERASI' },
+  { path: '/situational-overview', icon: 'map', label: 'Situational Overview', section: 'OPERASI' },
   { path: '/audit-trail', icon: 'receipt_long', label: 'Audit Trail', section: 'ADMINISTRASI' },
   { path: '/users', icon: 'manage_accounts', label: 'Manajemen Pengguna', section: 'ADMINISTRASI' },
 ];
@@ -18,6 +19,7 @@ const permissionByPath = {
   '/tipe-pesawat': 'aircraft',
   '/pangkalan': 'airbase',
   '/misi-penerbangan': 'missions',
+  '/situational-overview': 'dashboard',
   '/users': 'users',
 };
 
@@ -57,7 +59,7 @@ export default function Sidebar({ open = false, onClose }) {
           </div>
         </div>
         {onClose && (
-          <button type="button" aria-label="Tutup menu" onClick={onClose} className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
+          <button type="button" aria-label="Tutup menu" onClick={onClose} className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
             <span className="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         )}

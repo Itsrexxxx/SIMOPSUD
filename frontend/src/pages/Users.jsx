@@ -148,7 +148,7 @@ function UsersCard({ user, editingId, draftServiceUnit, setDraftServiceUnit, dra
             <div className="py-12 text-center text-sm text-slate-500">Belum ada pengguna.</div>
           ) : (
             <>
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto table-wrap">
               <table className="w-full min-w-[800px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>

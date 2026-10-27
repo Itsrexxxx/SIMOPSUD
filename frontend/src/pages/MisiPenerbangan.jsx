@@ -12,6 +12,10 @@ const defaultForm = {
   payload_kg: '',
   flight_level: '',
   alternate_base_id: '',
+  origin_location: null,
+  destination_location: null,
+  route_points: [],
+  alternate_locations: [],
 };
 
 const STATUS_OPTIONS = [
@@ -22,20 +26,40 @@ const STATUS_OPTIONS = [
   { value: 'Diverted', label: 'Diverted' },
 ];
 
-function statusBadge(status) {
-  if (status === 'Arrived') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (status === 'In-Flight') return 'border-amber-200 bg-amber-50 text-amber-700';
-  if (status === 'Diverted') return 'border-red-200 bg-red-50 text-red-700';
-  return 'border-sky-200 bg-sky-50 text-sky-700';
+const STATUS_TONE = {
+  Arrived: 'var(--status-aman)',
+  Completed: 'var(--status-aman)',
+  'In-Flight': 'var(--status-waspada)',
+  Delayed: 'var(--status-waspada)',
+  Diverted: 'var(--status-kritis)',
+};
+
+function StatusBadge({ status }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-semibold" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_TONE[status] || 'var(--text-muted)' }} aria-hidden="true" />
+      {status}
+    </span>
+  );
 }
 
 function CompactWeatherBadge({ weather }) {
   if (!weather) return <span className="text-xs text-slate-500">—</span>;
   const cond = (weather.weather_condition || '—').split(' (')[0];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${weather.is_realtime ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`} title={cond}>
-      <span className="font-bold">{Math.round(weather.temp_celsius)}°C</span>
-      <span className="font-normal opacity-80">{cond}</span>
+    <span className="inline-flex items-center gap-1.5 text-xs" title={`${cond} · ${weather.is_realtime ? 'real-time' : 'estimasi'}`}>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: weather.is_realtime ? 'var(--status-aman)' : 'var(--status-waspada)' }} aria-hidden="true" />
+      <span className="font-semibold tabular-nums text-slate-900">{Math.round(weather.temp_celsius)}°C</span>
+      <span className="text-slate-500">{cond}</span>
+    </span>
+  );
+}
+
+function WeatherFreshness({ realtime }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: realtime ? 'var(--status-aman)' : 'var(--status-waspada)' }} aria-hidden="true" />
+      {realtime ? 'Real-time' : 'Estimasi'}
     </span>
   );
 }
@@ -44,20 +68,20 @@ function formatDateTime(value) {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('id-ID', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 function formatTimeOnly(value) {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function FilterPill({ label, value, options, onChange }) {
   return (
-    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+    <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px]">
       <span className="whitespace-nowrap text-slate-500">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="bg-transparent text-sm font-semibold text-slate-800 focus:outline-none">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="bg-transparent text-[13px] font-semibold text-slate-800 focus:outline-none">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </label>
@@ -69,15 +93,15 @@ function MissionFiltersBar({ filters, setFilters, bases, units, onReset }) {
   const baseOptions = [{ value: '', label: 'Semua' }, ...bases.map((b) => ({ value: b.id, label: b.name }))];
   const unitOptions = [{ value: '', label: 'Semua' }, ...units.map((u) => ({ value: u.id, label: u.tail_number }))];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Filter Cepat</div>
-      <div className="flex flex-wrap gap-2">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
         <FilterPill label="Status" value={filters.status} options={STATUS_OPTIONS} onChange={update('status')} />
-        <FilterPill label="Lanud Asal" value={filters.origin_base_id} options={baseOptions} onChange={update('origin_base_id')} />
-        <FilterPill label="Lanud Tujuan" value={filters.destination_base_id} options={baseOptions} onChange={update('destination_base_id')} />
+        <FilterPill label="Lanud asal" value={filters.origin_base_id} options={baseOptions} onChange={update('origin_base_id')} />
+        <FilterPill label="Lanud tujuan" value={filters.destination_base_id} options={baseOptions} onChange={update('destination_base_id')} />
         <FilterPill label="Pesawat" value={filters.aircraft_id} options={unitOptions} onChange={update('aircraft_id')} />
-        <button type="button" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50" onClick={onReset}>Reset</button>
+        <button type="button" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50" onClick={onReset}>Reset</button>
       </div>
+      <p className="mt-3 text-xs text-slate-500">Titik hijau menandai cuaca real-time, oranye estimasi.</p>
     </div>
   );
 }
@@ -85,33 +109,34 @@ function MissionFiltersBar({ filters, setFilters, bases, units, onReset }) {
 function MissionRow({ m, onShowDetail, onEdit, onUpdateStatus, onDelete }) {
   const etd = formatTimeOnly(m.scheduled_departure);
   const eta = formatTimeOnly(m.predicted_arrival);
+  const jamTerbang = Number(m.aircraft_hours_after_arrival ?? 0).toFixed(1);
   return (
     <tr className="border-t border-slate-200 hover:bg-slate-50">
       <td className="px-4 py-3">
-        <div className="font-bold text-slate-900 font-mono text-sm">{m.tail_number}</div>
+        <div className="text-[13px] font-semibold text-slate-900">{m.tail_number}</div>
         <div className="text-xs text-slate-500">{m.aircraft_type || '—'}</div>
       </td>
-      <td className="px-4 py-3 text-sm text-slate-700">{m.origin_base_name}</td>
-      <td className="px-4 py-3 text-sm text-slate-700">→ {m.destination_base_name}</td>
-      <td className="px-4 py-3 font-mono text-xs text-slate-600">{m.distance_km?.toFixed?.(1) || '—'} km</td>
-      <td className="px-4 py-3 font-mono text-xs text-slate-600">+{m.predicted_duration_minutes?.toFixed?.(0) || '—'} m</td>
-      <td className="px-4 py-3 font-mono text-xs">
+      <td className="px-4 py-3 text-[13px] text-slate-700">{m.origin_base_name}</td>
+      <td className="px-4 py-3 text-[13px] text-slate-700">{m.destination_base_name}</td>
+      <td className="px-4 py-3 text-right text-[13px] tabular-nums text-slate-700">{m.distance_km?.toFixed?.(0) ?? '—'} km</td>
+      <td className="px-4 py-3 text-right text-[13px] tabular-nums text-slate-700">{m.predicted_duration_minutes?.toFixed?.(0) ?? '—'} mnt</td>
+      <td className="px-4 py-3 text-xs tabular-nums">
         <div className="text-slate-500">ETD {etd}</div>
-        <div className="font-bold text-blue-700">ETA {eta}</div>
+        <div className="font-semibold text-slate-900">ETA {eta}</div>
       </td>
       <td className="px-4 py-3"><CompactWeatherBadge weather={m.origin_weather} /></td>
       <td className="px-4 py-3"><CompactWeatherBadge weather={m.destination_weather} /></td>
       <td className="px-4 py-3">
-        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusBadge(m.status)}`}>{m.status}</span>
-        <div className="mt-1 text-xs text-slate-500">⏱ {(m.aircraft_hours_after_arrival ?? 0).toFixed?.(1) || 0} jam</div>
+        <StatusBadge status={m.status} />
+        <div className="mt-1 text-xs tabular-nums text-slate-500">{jamTerbang} jam terbang</div>
       </td>
       <td className="px-4 py-3">
         <div className="flex justify-end gap-1.5">
-          <button aria-label="Lihat detail misi" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => onShowDetail(m)} title="Detail">👁</button>
-          <button aria-label="Edit misi" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-blue-50 px-2.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => onEdit(m.id)} title="Edit">✎</button>
-          {m.status === 'Scheduled' && <button aria-label="Mulai terbang" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => onUpdateStatus(m.id, 'In-Flight')} title="Mulai terbang">▶</button>}
-          {m.status === 'In-Flight' && <button aria-label="Tandai tiba" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => onUpdateStatus(m.id, 'Arrived')} title="Tandai tiba">✓</button>}
-          <button aria-label="Hapus misi" className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-red-50 px-2.5 py-2 text-xs font-bold text-red-700 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400" onClick={() => onDelete(m.id)} title="Hapus">🗑</button>
+          <button type="button" aria-label="Lihat detail misi" className="icon-btn" onClick={() => onShowDetail(m)} title="Detail"><span className="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+          <button type="button" aria-label="Edit misi" className="icon-btn" onClick={() => onEdit(m.id)} title="Edit"><span className="material-symbols-outlined" aria-hidden="true">edit</span></button>
+          {m.status === 'Scheduled' && <button type="button" aria-label="Mulai terbang" className="icon-btn icon-btn--strong" onClick={() => onUpdateStatus(m.id, 'In-Flight')} title="Mulai terbang"><span className="material-symbols-outlined" aria-hidden="true">flight_takeoff</span></button>}
+          {m.status === 'In-Flight' && <button type="button" aria-label="Tandai tiba" className="icon-btn icon-btn--strong" onClick={() => onUpdateStatus(m.id, 'Arrived')} title="Tandai tiba"><span className="material-symbols-outlined" aria-hidden="true">flight_land</span></button>}
+          <button type="button" aria-label="Hapus misi" className="icon-btn icon-btn--danger" onClick={() => onDelete(m.id)} title="Hapus"><span className="material-symbols-outlined" aria-hidden="true">delete</span></button>
         </div>
       </td>
     </tr>
@@ -120,20 +145,23 @@ function MissionRow({ m, onShowDetail, onEdit, onUpdateStatus, onDelete }) {
 
 function MissionCard({ m, onShowDetail, onEdit, onUpdateStatus, onDelete }) {
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-2 p-4">
       <div className="flex items-start justify-between gap-2">
-        <div><div className="font-mono text-sm font-bold text-slate-900">{m.tail_number}</div><div className="text-xs text-slate-500">{m.aircraft_type || '—'}</div></div>
-        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusBadge(m.status)}`}>{m.status}</span>
+        <div>
+          <div className="text-[13px] font-semibold text-slate-900">{m.tail_number}</div>
+          <div className="text-xs text-slate-500">{m.aircraft_type || '—'}</div>
+        </div>
+        <StatusBadge status={m.status} />
       </div>
-      <div className="text-sm text-slate-700">{m.origin_base_name} → {m.destination_base_name} · <span className="font-mono text-xs">{m.distance_km?.toFixed?.(1) || '—'} km · +{m.predicted_duration_minutes?.toFixed?.(0) || '—'}m</span></div>
-      <div className="flex gap-2 text-xs font-mono"><span className="text-slate-500">ETD {formatTimeOnly(m.scheduled_departure)}</span><span className="font-bold text-blue-700">ETA {formatTimeOnly(m.predicted_arrival)}</span></div>
-      <div className="flex flex-wrap gap-2"><CompactWeatherBadge weather={m.origin_weather} /><CompactWeatherBadge weather={m.destination_weather} /></div>
-      <div className="flex justify-end gap-2">
-        <button aria-label="Detail" onClick={() => onShowDetail(m)} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-bold focus-visible:ring-2 focus-visible:ring-blue-500">👁</button>
-        <button aria-label="Edit" onClick={() => onEdit(m.id)} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-blue-50 px-2.5 py-2 text-xs font-bold text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500">✎</button>
-        {m.status === 'Scheduled' && <button aria-label="Mulai terbang" onClick={() => onUpdateStatus(m.id, 'In-Flight')} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-bold text-white">▶</button>}
-        {m.status === 'In-Flight' && <button aria-label="Tandai tiba" onClick={() => onUpdateStatus(m.id, 'Arrived')} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white">✓</button>}
-        <button aria-label="Hapus" onClick={() => onDelete(m.id)} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-red-50 px-2.5 py-2 text-xs font-bold text-red-700 focus-visible:ring-2 focus-visible:ring-red-400">🗑</button>
+      <div className="text-[13px] text-slate-700">{m.origin_base_name} → {m.destination_base_name}</div>
+      <div className="text-xs tabular-nums text-slate-500">{m.distance_km?.toFixed?.(0) ?? '—'} km · {m.predicted_duration_minutes?.toFixed?.(0) ?? '—'} mnt · ETD {formatTimeOnly(m.scheduled_departure)} · ETA {formatTimeOnly(m.predicted_arrival)}</div>
+      <div className="flex flex-wrap gap-3"><CompactWeatherBadge weather={m.origin_weather} /><CompactWeatherBadge weather={m.destination_weather} /></div>
+      <div className="flex justify-end gap-1.5">
+        <button type="button" aria-label="Lihat detail misi" className="icon-btn" onClick={() => onShowDetail(m)}><span className="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+        <button type="button" aria-label="Edit misi" className="icon-btn" onClick={() => onEdit(m.id)}><span className="material-symbols-outlined" aria-hidden="true">edit</span></button>
+        {m.status === 'Scheduled' && <button type="button" aria-label="Mulai terbang" className="icon-btn icon-btn--strong" onClick={() => onUpdateStatus(m.id, 'In-Flight')}><span className="material-symbols-outlined" aria-hidden="true">flight_takeoff</span></button>}
+        {m.status === 'In-Flight' && <button type="button" aria-label="Tandai tiba" className="icon-btn icon-btn--strong" onClick={() => onUpdateStatus(m.id, 'Arrived')}><span className="material-symbols-outlined" aria-hidden="true">flight_land</span></button>}
+        <button type="button" aria-label="Hapus misi" className="icon-btn icon-btn--danger" onClick={() => onDelete(m.id)}><span className="material-symbols-outlined" aria-hidden="true">delete</span></button>
       </div>
     </div>
   );
@@ -154,39 +182,60 @@ function MissionDetailModal({ mission, onClose }) {
   })();
 
   return (
-    <Modal title={`Detail Misi #${mission.id} — ${mission.tail_number || ''}`} onClose={onClose} footer={<button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700" onClick={onClose}>Tutup</button>}>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-          <div className="text-xs font-bold uppercase tracking-wide text-blue-700">ETD (Jadwal Berangkat)</div>
-          <div className="mt-1 text-sm font-bold text-slate-900">{etdText}</div>
+    <Modal title={`Detail Misi #${mission.id} — ${mission.tail_number || ''}`} onClose={onClose} footer={<button className="rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-blue-700" onClick={onClose}>Tutup</button>}>
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border p-3" style={{ borderColor: 'var(--card-border)' }}>
+          <div className="text-xs text-slate-500">ETD · jadwal berangkat</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">{etdText}</div>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-          <div className="text-xs font-bold uppercase tracking-wide text-emerald-700">ETA (Prediksi Tiba)</div>
-          <div className="mt-1 text-sm font-bold text-slate-900">{etaText}</div>
+        <div className="rounded-lg border p-3" style={{ borderColor: 'var(--card-border)' }}>
+          <div className="text-xs text-slate-500">ETA · prediksi tiba</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">{etaText}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div><div className="text-xs font-bold text-slate-500">Pesawat</div><div className="font-semibold text-slate-900">{mission.tail_number || '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Tipe</div><div className="font-semibold text-slate-900">{mission.aircraft_type || '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Status</div><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusBadge(mission.status)}`}>{mission.status}</span></div>
-        <div><div className="text-xs font-bold text-slate-500">Lanud Asal</div><div className="font-semibold text-slate-900">{mission.origin_base_name || '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Lanud Tujuan</div><div className="font-semibold text-slate-900">{mission.destination_base_name || '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Jarak</div><div className="font-semibold text-slate-900">{mission.distance_km?.toFixed?.(1) || '—'} KM</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Durasi Terbang</div><div className="font-semibold text-slate-900">+{durasi?.toFixed?.(1) || '—'} menit</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Status Lanud Tujuan</div><div className="font-semibold text-slate-900">{mission.airbase_status_after_arrival || '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">ETD Aktual</div><div className="font-semibold text-slate-900">{actualEtdText}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">ETA Aktual</div><div className="font-semibold text-slate-900">{actualEtaText}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Jam Sebelum Terbang</div><div className="font-semibold text-slate-900">{jamAwal != null ? Number(jamAwal).toFixed(1) : '—'} jam</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Akumulasi Setelah Tiba</div><div className="font-bold text-blue-700">{akumulasi != null ? Number(akumulasi).toFixed(1) : '—'} jam {jamAwal != null && durasi ? <span className="font-normal text-slate-500">({Number(jamAwal).toFixed(1)} + {(durasi / 60).toFixed(2)})</span> : null}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Payload</div><div className="font-semibold text-slate-900">{mission.payload_kg != null ? `${mission.payload_kg} kg` : '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Flight Level</div><div className="font-semibold text-slate-900">{mission.flight_level != null ? `FL${mission.flight_level}` : '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Wind Component</div><div className="font-semibold text-slate-900">{mission.wind_component_kmh != null ? `${mission.wind_component_kmh > 0 ? '+' : ''}${Number(mission.wind_component_kmh).toFixed(1)} km/h ${mission.wind_component_kmh > 0 ? 'head' : mission.wind_component_kmh < 0 ? 'tail' : ''}` : '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Taxi Time</div><div className="font-semibold text-slate-900">{mission.taxi_time_minutes != null ? `${Number(mission.taxi_time_minutes).toFixed(1)} min` : '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Alternate</div><div className="font-semibold text-slate-900">{mission.alternate_distance_km ? `${Number(mission.alternate_distance_km).toFixed(1)} km · ${mission.alternate_fuel_liters ?? '—'} L` : '—'}</div></div>
-        <div><div className="text-xs font-bold text-slate-500">Total Fuel</div><div className="font-bold text-amber-700">{mission.total_fuel_liters != null ? `${Number(mission.total_fuel_liters).toLocaleString('id-ID')} L` : '—'}</div></div>
-        <div className="col-span-2"><div className="text-xs font-bold text-slate-500">SIGMET</div><div className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ${mission.sigmet_active && mission.sigmet_active !== 'NIL' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{mission.sigmet_active || 'NIL'}</div></div>
-        <div className="col-span-2"><div className="text-xs font-bold text-slate-500">TAF</div><div className="text-xs text-slate-700 bg-slate-50 rounded-lg p-2 border border-slate-200">{mission.taf_summary || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Pesawat</div><div className="font-semibold text-slate-900">{mission.tail_number || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Tipe</div><div className="font-semibold text-slate-900">{mission.aircraft_type || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Status</div><div className="mt-0.5"><StatusBadge status={mission.status} /></div></div>
+        <div><div className="text-xs font-medium text-slate-500">Lanud Asal</div><div className="font-semibold text-slate-900">{mission.origin_base_name || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Lanud Tujuan</div><div className="font-semibold text-slate-900">{mission.destination_base_name || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Jarak</div><div className="font-semibold text-slate-900">{mission.distance_km?.toFixed?.(1) || '—'} KM</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Durasi Terbang</div><div className="font-semibold text-slate-900">+{durasi?.toFixed?.(1) || '—'} menit</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Status Lanud Tujuan</div><div className="font-semibold text-slate-900">{mission.airbase_status_after_arrival || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">ETD Aktual</div><div className="font-semibold text-slate-900">{actualEtdText}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">ETA Aktual</div><div className="font-semibold text-slate-900">{actualEtaText}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Selisih ETA</div><div className="font-semibold tabular-nums" style={{ color: mission.eta_variance_minutes > 0 ? 'var(--status-kritis)' : 'var(--status-aman)' }}>{mission.eta_variance_minutes != null ? `${mission.eta_variance_minutes > 0 ? '+' : ''}${mission.eta_variance_minutes} menit` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Alasan Keterlambatan</div><div className="font-semibold text-slate-900">{mission.delay_reason || '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Jam Sebelum Terbang</div><div className="font-semibold text-slate-900">{jamAwal != null ? Number(jamAwal).toFixed(1) : '—'} jam</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Akumulasi Setelah Tiba</div><div className="font-semibold tabular-nums text-slate-900">{akumulasi != null ? Number(akumulasi).toFixed(1) : '—'} jam {jamAwal != null && durasi ? <span className="font-normal text-slate-500">({Number(jamAwal).toFixed(1)} + {(durasi / 60).toFixed(2)})</span> : null}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Payload</div><div className="font-semibold text-slate-900">{mission.payload_kg != null ? `${mission.payload_kg} kg` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Flight Level</div><div className="font-semibold text-slate-900">{mission.flight_level != null ? `FL${mission.flight_level}` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Wind Component</div><div className="font-semibold text-slate-900">{mission.wind_component_kmh != null ? `${mission.wind_component_kmh > 0 ? '+' : ''}${Number(mission.wind_component_kmh).toFixed(1)} km/h ${mission.wind_component_kmh > 0 ? 'head' : mission.wind_component_kmh < 0 ? 'tail' : ''}` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Taxi Time</div><div className="font-semibold text-slate-900">{mission.taxi_time_minutes != null ? `${Number(mission.taxi_time_minutes).toFixed(1)} min` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Alternate</div><div className="font-semibold text-slate-900">{mission.alternate_distance_km ? `${Number(mission.alternate_distance_km).toFixed(1)} km · ${mission.alternate_fuel_liters ?? '—'} L` : '—'}</div></div>
+        <div><div className="text-xs font-medium text-slate-500">Total Fuel</div><div className="font-semibold tabular-nums text-slate-900">{mission.total_fuel_liters != null ? `${Number(mission.total_fuel_liters).toLocaleString('id-ID')} L` : '—'}</div></div>
+        <div className="col-span-2"><div className="text-xs font-medium text-slate-500">SIGMET</div><div className="inline-flex rounded-md px-2 py-0.5 text-xs font-semibold" style={mission.sigmet_active && mission.sigmet_active !== 'NIL' ? { background: 'var(--status-kritis-bg)', color: 'var(--status-kritis)' } : { background: 'var(--status-aman-bg)', color: 'var(--status-aman)' }}>{mission.sigmet_active || 'NIL'}</div></div>
+        <div className="col-span-2"><div className="text-xs font-medium text-slate-500">TAF</div><div className="text-xs text-slate-700 bg-slate-50 rounded-lg p-2 border border-slate-200">{mission.taf_summary || '—'}</div></div>
       </div>
+      {mission.route_legs?.length > 0 && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium text-slate-500">Rute dan progres ETA</div>
+          <div className="mt-3 space-y-3">
+            {mission.route_legs.map((point, index) => {
+              const active = mission.status === 'In-Flight' && index === 0;
+              const reached = mission.status === 'Arrived' || (mission.status === 'In-Flight' && index < 1);
+              return <div key={`${point.name}-${point.order ?? index}`} className="flex items-center gap-3">
+                <span className={`h-3 w-3 shrink-0 rounded-full border-2 ${reached ? 'border-emerald-500 bg-emerald-400' : 'border-slate-300 bg-white'} ${active ? 'animate-pulse' : ''}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between gap-2 text-sm font-semibold text-slate-800"><span className="truncate">{point.name}</span><span className="text-xs font-normal text-slate-500">Transit {point.order ?? index + 1}</span></div>
+                  <div className="text-xs text-slate-500">{point.latitude}, {point.longitude}{point.stop_duration_minutes ? ` · berhenti ${point.stop_duration_minutes} menit` : ''}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+          <div className="mt-3 text-xs text-slate-500">Animasi hanya menandai status misi; bukan posisi GPS realtime.</div>
+        </div>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-3">
         {[
           ['Cuaca Asal', mission.origin_weather],
@@ -195,11 +244,11 @@ function MissionDetailModal({ mission, onClose }) {
           <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-600">{label}</span>
-              {w && <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${w.is_realtime ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{w.is_realtime ? 'Real-Time' : 'Estimasi'}</span>}
+              {w && <WeatherFreshness realtime={w.is_realtime} />}
             </div>
             <div className="mt-2 text-2xl font-extrabold text-slate-900">{w ? `${Math.round(w.temp_celsius)}°C` : '—'}</div>
             <div className="text-xs text-slate-600">{w?.weather_condition || '—'}</div>
-            {w && <div className="mt-1 text-xs text-slate-500">💨 {Math.round(w.wind_speed_kmh)} km/jam</div>}
+            {w && <div className="mt-1 text-xs tabular-nums text-slate-500">Angin {Math.round(w.wind_speed_kmh)} km/jam</div>}
           </div>
         ))}
       </div>
@@ -216,28 +265,39 @@ function CompactWeatherInline({ label, weather, loading }) {
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-slate-600">{label}</span>
-        <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${weather.is_realtime ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{weather.is_realtime ? 'Real-Time' : 'Estimasi'}</span>
+        <WeatherFreshness realtime={weather.is_realtime} />
       </div>
       <div className="mt-2 text-xl font-extrabold text-slate-900">{Math.round(weather.temp_celsius)}°C</div>
       <div className="text-xs text-slate-600">{weather.weather_condition}</div>
-      <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500"><span>💨 {Math.round(weather.wind_speed_kmh)} km/jam · {wdir}</span><span>👁 {vis}</span>{weather.cloudcover_pct != null ? <span>☁ {weather.cloudcover_pct}%</span> : null}</div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums text-slate-500"><span>Angin {Math.round(weather.wind_speed_kmh)} km/jam · {wdir}</span><span>Jarak pandang {vis}</span>{weather.cloudcover_pct != null ? <span>Awan {weather.cloudcover_pct}%</span> : null}</div>
       {weather.taf_summary && <div className="mt-2 rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs text-slate-700">{weather.taf_summary}</div>}
-      {weather.sigmet_active && weather.sigmet_active !== 'NIL' && <div className="mt-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-xs font-bold text-red-700">{weather.sigmet_active}</div>}
+      {weather.sigmet_active && weather.sigmet_active !== 'NIL' && <div className="mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: 'var(--status-kritis-bg)', color: 'var(--status-kritis)' }}>{weather.sigmet_active}</div>}
     </div>
   );
 }
 
+function LocationInline({ label, value, onChange }) {
+  if (!value) return <button type="button" className="mt-2 text-[13px] font-medium text-slate-700 hover:underline" onClick={() => onChange({ name: '', country: '', latitude: '', longitude: '', location_type: 'OTHER' })}>+ Tambah lokasi baru</button>;
+  return <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-3">
+    <input aria-label={`${label} nama`} className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Nama lokasi *" value={value.name} onChange={(e) => onChange({ ...value, name: e.target.value })} />
+    <input aria-label={`${label} negara`} className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Negara" value={value.country || ''} onChange={(e) => onChange({ ...value, country: e.target.value })} />
+    <input aria-label={`${label} latitude`} type="number" min="-90" max="90" step="any" className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Latitude *" value={value.latitude} onChange={(e) => onChange({ ...value, latitude: e.target.value })} />
+    <input aria-label={`${label} longitude`} type="number" min="-180" max="180" step="any" className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Longitude *" value={value.longitude} onChange={(e) => onChange({ ...value, longitude: e.target.value })} />
+    <button type="button" className="col-span-2 text-left text-xs text-slate-600" onClick={() => onChange(null)}>Pakai lokasi tersimpan</button>
+  </div>;
+}
+
 function PredictionModal({ open, onClose, bases, units, form, setForm, onSubmit, predicting, predictionResult, onSave, saving, editingId, error, originWeather, destinationWeather, originWeatherLoading, destinationWeatherLoading }) {
   if (!open) return null;
-  const canPredict = form.aircraft_id && form.origin_base_id && form.destination_base_id && form.origin_base_id !== form.destination_base_id;
+  const canPredict = form.aircraft_id && (form.origin_base_id || form.origin_location?.name) && (form.destination_base_id || form.destination_location?.name) && (form.origin_base_id !== form.destination_base_id || form.origin_location || form.destination_location);
   return (
     <Modal title={editingId ? 'Edit Misi Penerbangan' : 'Prediksi & Daftarkan Misi'} onClose={onClose} footer={
       <>
-        <button type="button" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={onClose}>Tutup</button>
+        <button type="button" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50" onClick={onClose}>Tutup</button>
         {!predictionResult ? (
-          <button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50" onClick={onSubmit} disabled={predicting || !canPredict}>{predicting ? 'Memproses…' : 'Prediksi'}</button>
+          <button type="button" className="rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50" onClick={onSubmit} disabled={predicting || !canPredict}>{predicting ? 'Memproses…' : 'Prediksi'}</button>
         ) : (
-          <button type="button" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50" onClick={onSave} disabled={saving}>{saving ? 'Menyimpan…' : editingId ? 'Simpan Perubahan' : 'Daftarkan Misi'}</button>
+          <button type="button" className="rounded-lg bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" onClick={onSave} disabled={saving}>{saving ? 'Menyimpan…' : editingId ? 'Simpan Perubahan' : 'Daftarkan Misi'}</button>
         )}
       </>
     }>
@@ -254,18 +314,24 @@ function PredictionModal({ open, onClose, bases, units, form, setForm, onSubmit,
           <input type="datetime-local" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={form.scheduled_departure} onChange={(e) => setForm((p) => ({ ...p, scheduled_departure: e.target.value }))} />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">Lanud Asal *</label>
-          <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={form.origin_base_id} onChange={(e) => setForm((p) => ({ ...p, origin_base_id: e.target.value }))}>
-            <option value="">— pilih —</option>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">Asal *</label>
+          <select disabled={!!form.origin_location} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm disabled:bg-slate-100" value={form.origin_base_id} onChange={(e) => setForm((p) => ({ ...p, origin_base_id: e.target.value }))}>
+            <option value="">— pilih lokasi tersimpan —</option>
             {bases.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
+          <LocationInline label="Asal" value={form.origin_location} onChange={(value) => setForm((p) => ({ ...p, origin_location: value, origin_base_id: value ? '' : p.origin_base_id }))} />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">Lanud Tujuan *</label>
-          <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value={form.destination_base_id} onChange={(e) => setForm((p) => ({ ...p, destination_base_id: e.target.value }))}>
-            <option value="">— pilih —</option>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">Tujuan akhir *</label>
+          <select disabled={!!form.destination_location} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm disabled:bg-slate-100" value={form.destination_base_id} onChange={(e) => setForm((p) => ({ ...p, destination_base_id: e.target.value }))}>
+            <option value="">— pilih lokasi tersimpan —</option>
             {bases.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
+          <LocationInline label="Tujuan" value={form.destination_location} onChange={(value) => setForm((p) => ({ ...p, destination_location: value, destination_base_id: value ? '' : p.destination_base_id }))} />
+        </div>
+        <div className="md:col-span-2 rounded-xl border border-slate-200 p-3">
+          <div className="flex items-center justify-between"><span className="text-[13px] font-medium text-slate-700">Titik transit</span><button type="button" className="text-[13px] font-medium text-slate-700 hover:underline" onClick={() => setForm((p) => ({ ...p, route_points: [...p.route_points, { name: '', latitude: '', longitude: '', order: p.route_points.length + 1, stop_duration_minutes: '' }] }))}>+ Tambah titik transit</button></div>
+          {form.route_points.map((point, index) => <div key={index} className="mt-2 grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-lg"><input className="rounded-lg border px-2 py-1.5 text-xs" placeholder={`Transit ${index + 1} *`} value={point.name} onChange={(e) => setForm((p) => ({ ...p, route_points: p.route_points.map((x, i) => i === index ? { ...x, name: e.target.value } : x) }))} /><input type="number" step="any" className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Latitude *" value={point.latitude} onChange={(e) => setForm((p) => ({ ...p, route_points: p.route_points.map((x, i) => i === index ? { ...x, latitude: e.target.value } : x) }))} /><input type="number" step="any" className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Longitude *" value={point.longitude} onChange={(e) => setForm((p) => ({ ...p, route_points: p.route_points.map((x, i) => i === index ? { ...x, longitude: e.target.value } : x) }))} /><input type="number" min="0" className="rounded-lg border px-2 py-1.5 text-xs" placeholder="Durasi berhenti (opsional)" value={point.stop_duration_minutes} onChange={(e) => setForm((p) => ({ ...p, route_points: p.route_points.map((x, i) => i === index ? { ...x, stop_duration_minutes: e.target.value } : x) }))} /></div>)}
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1.5">Payload (kg)</label>
@@ -288,29 +354,37 @@ function PredictionModal({ open, onClose, bases, units, form, setForm, onSubmit,
         <CompactWeatherInline label="Cuaca Asal" weather={originWeather} loading={originWeatherLoading} />
         <CompactWeatherInline label="Cuaca Tujuan" weather={destinationWeather} loading={destinationWeatherLoading} />
       </div>
-      {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="mt-4 rounded-lg border px-4 py-3 text-[13px]" style={{ borderColor: 'color-mix(in srgb, var(--status-kritis) 45%, transparent)', background: 'var(--status-kritis-bg)', color: 'var(--text-primary)' }}>{error}</div>}
       {predictionResult && (
-        <div className="mt-4 space-y-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="grid grid-cols-4 gap-3">
-              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center"><div className="text-xs text-slate-500">Jarak</div><div className="text-sm font-bold text-slate-900">{predictionResult.distance_km} km</div></div>
-              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center"><div className="text-xs text-slate-500">Durasi</div><div className="text-sm font-bold text-slate-900">{predictionResult.predicted_duration_minutes} m</div><div className="text-xs text-slate-400">{predictionResult.air_time_minutes != null ? `air ${predictionResult.air_time_minutes}m + taxi ${predictionResult.taxi_time_minutes}m` : ''}</div></div>
-              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center"><div className="text-xs text-slate-500">ETA</div><div className="text-sm font-bold text-slate-900">{new Date(predictionResult.predicted_arrival).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div></div>
-              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center"><div className="text-xs text-slate-500">Risiko</div><div className="text-sm font-bold text-slate-900">{predictionResult.delay_risk}</div></div>
+        <div className="mt-4 rounded-lg border border-slate-200 p-4">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-4">
+            {[
+              ['Jarak', `${predictionResult.distance_km} km`, null],
+              ['Durasi', `${predictionResult.predicted_duration_minutes} mnt`, predictionResult.air_time_minutes != null ? `terbang ${predictionResult.air_time_minutes} + taxi ${predictionResult.taxi_time_minutes} mnt` : null],
+              ['ETA', formatTimeOnly(predictionResult.predicted_arrival), null],
+              ['Risiko keterlambatan', predictionResult.delay_risk, null],
+            ].map(([label, value, note]) => (
+              <div key={label}>
+                <dt className="text-xs text-slate-500">{label}</dt>
+                <dd className="text-sm font-semibold tabular-nums text-slate-900">{value}</dd>
+                {note && <dd className="text-xs tabular-nums text-slate-500">{note}</dd>}
+              </div>
+            ))}
+          </dl>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-200 pt-3 text-xs md:grid-cols-4">
+            <div><dt className="text-slate-500">Ground speed</dt><dd className="tabular-nums text-slate-900">{predictionResult.ground_speed_kmh} km/h · {predictionResult.bearing_deg}°</dd><dd className="tabular-nums text-slate-500">TAS {predictionResult.cruise_speed_kmh} km/h</dd></div>
+            <div><dt className="text-slate-500">Komponen angin</dt><dd className="tabular-nums text-slate-900">{predictionResult.wind_component_label || `${predictionResult.wind_component_kmh} km/h`}</dd>{predictionResult.origin_weather?.wind_direction_deg != null && <dd className="tabular-nums text-slate-500">{predictionResult.origin_weather.wind_direction_deg}° → {predictionResult.destination_weather?.wind_direction_deg ?? '—'}°</dd>}</div>
+            <div><dt className="text-slate-500">Jarak pandang</dt><dd className="tabular-nums text-slate-900">{predictionResult.origin_weather?.visibility_m ? `${(predictionResult.origin_weather.visibility_m / 1000).toFixed(1)} km` : '—'}</dd><dd className="tabular-nums text-slate-500">tujuan {predictionResult.destination_weather?.visibility_m ? `${(predictionResult.destination_weather.visibility_m / 1000).toFixed(1)} km` : '—'}</dd></div>
+            <div><dt className="text-slate-500">Bahan bakar</dt><dd className="tabular-nums text-slate-900">{predictionResult.estimated_avtur_consumed_liters} L</dd><dd className="tabular-nums text-slate-500">total {predictionResult.total_fuel_liters} L{predictionResult.alternate_fuel_liters ? ` · alt ${predictionResult.alternate_fuel_liters} L` : ''}</dd></div>
+          </dl>
+          {(predictionResult.sigmet_active && predictionResult.sigmet_active !== 'NIL') || predictionResult.taf_summary || predictionResult.payload_ratio > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {predictionResult.sigmet_active && predictionResult.sigmet_active !== 'NIL' && <span className="rounded-md px-2 py-0.5 font-semibold" style={{ background: 'var(--status-kritis-bg)', color: 'var(--status-kritis)' }}>SIGMET {predictionResult.sigmet_active}</span>}
+              {predictionResult.payload_ratio > 0 && <span className="rounded-md px-2 py-0.5" style={{ background: 'var(--status-waspada-bg)', color: 'var(--text-primary)' }}>Payload {(predictionResult.payload_ratio * 100).toFixed(0)}%</span>}
+              {predictionResult.taf_summary && <span className="rounded-md border border-slate-200 px-2 py-0.5 text-slate-600">{predictionResult.taf_summary}</span>}
             </div>
-            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div className="rounded-lg bg-white border p-2"><span className="text-slate-500">GS</span> <b>{predictionResult.ground_speed_kmh} km/h</b> <span className="text-slate-400">{predictionResult.bearing_deg}° TAS {predictionResult.cruise_speed_kmh} km/h</span></div>
-              <div className="rounded-lg bg-white border p-2"><span className="text-slate-500">Wind</span> <b>{predictionResult.wind_component_label || `${predictionResult.wind_component_kmh} km/h`}</b> {predictionResult.origin_weather?.wind_direction_deg != null && <span className="text-slate-400">{predictionResult.origin_weather.wind_direction_deg}°{predictionResult.origin_weather.wind_from_compass ? ` ${predictionResult.origin_weather.wind_from_compass}` : ''} → dest {predictionResult.destination_weather?.wind_direction_deg ?? '—'}°</span>}</div>
-              <div className="rounded-lg bg-white border p-2"><span className="text-slate-500">VIS</span> <b>{predictionResult.origin_weather?.visibility_m ? `${(predictionResult.origin_weather.visibility_m/1000).toFixed(1)} km` : '—'}</b> <span className="text-slate-400">→ {predictionResult.destination_weather?.visibility_m ? `${(predictionResult.destination_weather.visibility_m/1000).toFixed(1)} km` : '—'} pred</span></div>
-              <div className="rounded-lg bg-white border p-2"><span className="text-slate-500">Fuel trip</span> <b>{predictionResult.estimated_avtur_consumed_liters} L</b> <span className="text-slate-400">total {predictionResult.total_fuel_liters}L{predictionResult.alternate_fuel_liters ? ` alt ${predictionResult.alternate_fuel_liters}L` : ''}</span></div>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              {predictionResult.sigmet_active && predictionResult.sigmet_active !== 'NIL' && <span className="rounded-full bg-red-100 border border-red-200 px-2.5 py-1 font-bold text-red-700">{predictionResult.sigmet_active}</span>}
-              {predictionResult.taf_summary && <span className="rounded-full bg-slate-100 border px-2.5 py-1 text-slate-700">{predictionResult.taf_summary}</span>}
-              {predictionResult.payload_ratio != null && predictionResult.payload_ratio > 0 && <span className="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-amber-700">Payload {(predictionResult.payload_ratio*100).toFixed(0)}%</span>}
-            </div>
-            {predictionResult.recommendations?.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">{predictionResult.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul>}
-          </div>
+          ) : null}
+          {predictionResult.recommendations?.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-[13px] text-slate-700">{predictionResult.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul>}
         </div>
       )}
     </Modal>
@@ -417,12 +491,14 @@ export default function MisiPenerbangan() {
     try {
       const res = await flightMissionAPI.predictETA({
         aircraft_id: parseInt(form.aircraft_id),
-        origin_base_id: parseInt(form.origin_base_id),
-        destination_base_id: parseInt(form.destination_base_id),
+        ...(form.origin_base_id ? { origin_base_id: parseInt(form.origin_base_id) } : { origin_location: { ...form.origin_location, latitude: Number(form.origin_location.latitude), longitude: Number(form.origin_location.longitude) } }),
+        ...(form.destination_base_id ? { destination_base_id: parseInt(form.destination_base_id) } : { destination_location: { ...form.destination_location, latitude: Number(form.destination_location.latitude), longitude: Number(form.destination_location.longitude) } }),
+        route_points: form.route_points.map((p) => ({ ...p, latitude: Number(p.latitude), longitude: Number(p.longitude), stop_duration_minutes: p.stop_duration_minutes ? Number(p.stop_duration_minutes) : null })),
         scheduled_departure: new Date(form.scheduled_departure).toISOString(),
         payload_kg: form.payload_kg ? parseFloat(form.payload_kg) : 0,
         flight_level: form.flight_level ? parseInt(form.flight_level) : null,
         alternate_base_id: form.alternate_base_id ? parseInt(form.alternate_base_id) : null,
+        alternate_locations: form.alternate_locations,
       });
       setPredictionResult(res.data);
     } catch (err) {
@@ -431,14 +507,16 @@ export default function MisiPenerbangan() {
     setPredicting(false);
   };
   const handleSaveMission = async () => {
-    if (!form.aircraft_id || !form.origin_base_id || !form.destination_base_id) return;
-    if (form.origin_base_id === form.destination_base_id) { setError('Lanud Asal dan Lanud Tujuan tidak boleh sama.'); return; }
+    if (!form.aircraft_id || (!form.origin_base_id && !form.origin_location) || (!form.destination_base_id && !form.destination_location)) return;
+    if (form.origin_base_id && form.origin_base_id === form.destination_base_id) { setError('Lanud Asal dan Lanud Tujuan tidak boleh sama.'); return; }
     setSaving(true);
     try {
       const payload = {
         aircraft_id: parseInt(form.aircraft_id),
-        origin_base_id: parseInt(form.origin_base_id),
-        destination_base_id: parseInt(form.destination_base_id),
+        ...(form.origin_base_id ? { origin_base_id: parseInt(form.origin_base_id) } : { origin_location: { ...form.origin_location, latitude: Number(form.origin_location.latitude), longitude: Number(form.origin_location.longitude) } }),
+        ...(form.destination_base_id ? { destination_base_id: parseInt(form.destination_base_id) } : { destination_location: { ...form.destination_location, latitude: Number(form.destination_location.latitude), longitude: Number(form.destination_location.longitude) } }),
+        route_points: form.route_points.map((p) => ({ ...p, latitude: Number(p.latitude), longitude: Number(p.longitude), stop_duration_minutes: p.stop_duration_minutes ? Number(p.stop_duration_minutes) : null })),
+        alternate_locations: form.alternate_locations,
         scheduled_departure: new Date(form.scheduled_departure).toISOString(),
         payload_kg: form.payload_kg ? parseFloat(form.payload_kg) : 0,
         flight_level: form.flight_level ? parseInt(form.flight_level) : null,
@@ -460,11 +538,15 @@ export default function MisiPenerbangan() {
       setEditingId(id);
       setForm({
         aircraft_id: String(m.aircraft_id),
-        origin_base_id: String(m.origin_base_id),
-        destination_base_id: String(m.destination_base_id),
+        origin_base_id: m.origin_base_id ? String(m.origin_base_id) : '',
+        destination_base_id: m.destination_base_id ? String(m.destination_base_id) : '',
+        origin_location: m.origin_location || null,
+        destination_location: m.destination_location || null,
+        route_points: (m.route_legs || []).map((p, index) => ({ ...p, order: p.order ?? index + 1, stop_duration_minutes: p.stop_duration_minutes ?? '' })),
+        alternate_locations: m.alternate_locations || [],
         scheduled_departure: m.scheduled_departure ? new Date(m.scheduled_departure).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-        payload_kg: m.payload_kg ? String(m.payload_kg) : '',
-        flight_level: m.flight_level ? String(m.flight_level) : '',
+        payload_kg: m.payload_kg != null ? String(m.payload_kg) : '',
+        flight_level: m.flight_level != null ? String(m.flight_level) : '',
         alternate_base_id: m.alternate_base_id ? String(m.alternate_base_id) : '',
       });
       setPredictionResult(null); setError(''); setPredictOpen(true);
@@ -474,7 +556,8 @@ export default function MisiPenerbangan() {
   };
   const handleUpdateStatus = async (id, newStatus) => {
     try {
-      await flightMissionAPI.updateStatus(id, { status: newStatus, actual_departure: newStatus === 'In-Flight' ? new Date().toISOString() : null });
+      if (newStatus === 'In-Flight') await flightMissionAPI.approve(id, { approval_note: 'Disetujui melalui panel misi' });
+      await flightMissionAPI.updateStatus(id, { status: newStatus, actual_departure: newStatus === 'In-Flight' ? new Date().toISOString() : null, actual_arrival: newStatus === 'Arrived' ? new Date().toISOString() : null });
       await loadData();
       setNotice({ type: 'success', title: 'Status diperbarui', message: `Misi #${id} sekarang ${newStatus}.` });
     } catch (err) {
@@ -491,40 +574,40 @@ export default function MisiPenerbangan() {
 
   return (
     <div>
-      <PageShell title="Prediksi ETA & Misi Penerbangan" subtitle="Prediksi kedatangan lintas lanud dengan cuaca real-time Open-Meteo" actions={<><span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">Open-Meteo</span><button type="button" className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700" onClick={openPredict}>+ Prediksi & Daftar Misi</button></>}>
+      <PageShell title="Prediksi ETA & Misi Penerbangan" subtitle="Prediksi kedatangan lintas lanud dengan cuaca real-time Open-Meteo" actions={<><span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--status-aman)' }} aria-hidden="true" />Cuaca: Open-Meteo</span><button type="button" className="rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-blue-700" onClick={openPredict}>Prediksi &amp; daftar misi</button></>}>
       <div className="space-y-6">
         <div className="relative max-w-md">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">⌕</span>
-          <input value={missionSearch} onChange={(e) => setMissionSearch(e.target.value)} placeholder="Cari tail number / lanud…" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-500" aria-hidden="true">search</span>
+          <input value={missionSearch} onChange={(e) => setMissionSearch(e.target.value)} placeholder="Cari tail number atau lanud" aria-label="Cari misi" className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-[13px] placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
         </div>
         <MissionFiltersBar filters={filters} setFilters={setFilters} bases={bases} units={units} onReset={resetFilters} />
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-12 flex items-center justify-center gap-3 text-sm text-slate-600"><span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" /> Memuat misi…</div>
+          <div className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-12 text-sm text-slate-600"><span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" /> Memuat misi…</div>
         ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <div className="text-sm font-bold text-slate-900">Daftar Misi Penerbangan</div>
-              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">{total} Misi</span>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+              <h2 className="text-sm font-semibold text-slate-900">Daftar misi penerbangan</h2>
+              <span className="text-xs tabular-nums text-slate-500">{total} misi</span>
             </div>
             {missions.length === 0 ? (
-              <EmptyState icon="✈" title="Belum Ada Misi" desc="Tekan tombol Prediksi untuk mendaftarkan misi baru." />
+              <EmptyState icon={<span className="material-symbols-outlined">flight</span>} title="Belum ada misi" desc="Tekan Prediksi & Daftar Misi untuk membuat misi baru." />
             ) : (
               <>
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto table-wrap">
                   <table className="w-full min-w-[900px]">
-                  <thead className="bg-blue-50 border-b border-blue-100">
+                  <thead className="border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Unit</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Asal</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Tujuan</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Jarak</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Durasi</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Jadwal</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Cuaca A</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Cuaca B</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase text-blue-900">Status</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold uppercase text-blue-900">Aksi</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Unit</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Asal</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Tujuan</th>
+                      <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-slate-500">Jarak</th>
+                      <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-slate-500">Durasi</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Jadwal</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Cuaca asal</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Cuaca tujuan</th>
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-slate-500">Status</th>
+                      <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-slate-500">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -547,9 +630,9 @@ export default function MisiPenerbangan() {
 
       <PredictionModal open={predictOpen} onClose={() => setPredictOpen(false)} bases={bases} units={units} form={form} setForm={setForm} onSubmit={handlePredict} predicting={predicting} predictionResult={predictionResult} onSave={handleSaveMission} saving={saving} editingId={editingId} error={error} originWeather={originWeather} destinationWeather={destinationWeather} originWeatherLoading={originWeatherLoading} destinationWeatherLoading={destinationWeatherLoading} />
 
-      {notice && <Modal title={notice.title} onClose={() => setNotice(null)} footer={<button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700" onClick={() => setNotice(null)}>OK</button>}><div className={`text-sm ${notice.type === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{notice.message}</div></Modal>}
+      {notice && <Modal title={notice.title} onClose={() => setNotice(null)} footer={<button className="rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-blue-700" onClick={() => setNotice(null)}>OK</button>}><div className={`text-sm ${notice.type === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{notice.message}</div></Modal>}
 
-      {deleteTarget && <Modal title="Konfirmasi Hapus Misi" onClose={() => setDeleteTarget(null)} footer={<><button className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" onClick={() => setDeleteTarget(null)}>Batal</button><button className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700" onClick={confirmDeleteMission}>Hapus</button></>}><p className="text-sm text-slate-600">Misi penerbangan ini akan dihapus permanen. Lanjut?</p></Modal>}
+      {deleteTarget && <Modal title="Konfirmasi Hapus Misi" onClose={() => setDeleteTarget(null)} footer={<><button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50" onClick={() => setDeleteTarget(null)}>Batal</button><button className="rounded-lg bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700" onClick={confirmDeleteMission}>Hapus</button></>}><p className="text-sm text-slate-600">Misi penerbangan ini akan dihapus permanen. Lanjut?</p></Modal>}
     </div>
   );
 }
