@@ -14,6 +14,10 @@ from app.services.virtual_telemetry import build_track
 
 router = APIRouter()
 
+# bbox Indonesia (Sabang..Merauke): dipakai cakupan nasional supaya traffic
+# luar negeri tidak ikut tampil walau radius query-nya besar
+INDONESIA_BBOX = (-11.5, 94.5, 6.5, 141.5)  # lamin, lomin, lamax, lomax
+
 
 def _coordinate_warning(base: AirBase) -> str | None:
     if base.latitude is None or base.longitude is None:
@@ -73,6 +77,7 @@ def get_tracks(
     status: str = Query("In-Flight"),
     airbase_id: int | None = Query(None, ge=1),
     q: str | None = Query(None, min_length=1, max_length=80),
+    scope: str = Query("national", pattern="^(base|national)$"),
     db: Session = Depends(get_db),
     _: object = Depends(require_permissions("dashboard")),
 ):
@@ -129,14 +134,27 @@ def get_tracks(
     adsb_error = None
     adsb_notes: list[str] = []
     adsb_provider = None
-    coverage_nm = int(settings.ADSB_RADIUS_NM or 250)
+    # scope=national: satu query radius besar dari titik tengah Indonesia, jadi
+    # seluruh wilayah terlihat sekaligus (bukan lingkaran 250 nm per lanud)
     coverage_base = None
-    if airbase_id is not None:
-        coverage_base = next((base for base in airbases if base.id == airbase_id and _coordinate_warning(base) is None), None)
-    coverage_base = coverage_base or next((base for base in airbases if _coordinate_warning(base) is None), None)
-    if coverage_base:
+    coverage_id: int | None = None
+    coverage_name = "Seluruh Indonesia"
+    coverage_nm = int(settings.ADSB_NATIONAL_RADIUS_NM or 2500)
+    coverage_lat, coverage_lon = float(settings.ADSB_NATIONAL_LAT), float(settings.ADSB_NATIONAL_LON)
+    if scope == "base":
+        coverage_nm = int(settings.ADSB_RADIUS_NM or 250)
+        if airbase_id is not None:
+            coverage_base = next((base for base in airbases if base.id == airbase_id and _coordinate_warning(base) is None), None)
+        coverage_base = coverage_base or next((base for base in airbases if _coordinate_warning(base) is None), None)
+        if coverage_base:
+            coverage_id, coverage_name = coverage_base.id, coverage_base.name
+            coverage_lat, coverage_lon = float(coverage_base.latitude), float(coverage_base.longitude)
+    if coverage_base or scope == "national":
         try:
-            result = fetch_provider_tracks(float(coverage_base.latitude), float(coverage_base.longitude), coverage_nm)
+            result = fetch_provider_tracks(
+                coverage_lat, coverage_lon, coverage_nm,
+                bbox=INDONESIA_BBOX if scope == "national" else None,
+            )
         except Exception as exc:  # provider layer already swallows; last net so the map never dies
             result = {"tracks": [], "provider": None, "error": f"Provider ADSB gagal: {type(exc).__name__}", "radius_nm": coverage_nm}
         adsb_tracks = result["tracks"]
@@ -144,7 +162,13 @@ def get_tracks(
         if result.get("errors"):
             adsb_error = (adsb_error or "") + (" — " if adsb_error else "") + "catatan: " + "; ".join(result["errors"])
         adsb_notes = result.get("errors") or []
-        center = {"lat": coverage_base.latitude, "lon": coverage_base.longitude}
+        if scope == "national":
+            lamin, lomin, lamax, lomax = INDONESIA_BBOX
+            adsb_tracks = [
+                track for track in adsb_tracks
+                if lamin <= track["latitude"] <= lamax and lomin <= track["longitude"] <= lomax
+            ]
+        center = {"lat": coverage_lat, "lon": coverage_lon}
         for track in adsb_tracks:
             track["coverage_center"] = center
     else:
@@ -155,10 +179,10 @@ def get_tracks(
     ]
     virtual_count = sum(1 for track in tracks if track.get("is_virtual"))
     coverage = None
-    if coverage_base:
+    if coverage_base or scope == "national":
         coverage = {
-            "base_id": coverage_base.id, "base_name": coverage_base.name,
-            "lat": coverage_base.latitude, "lon": coverage_base.longitude,
+            "scope": scope, "base_id": coverage_id, "base_name": coverage_name,
+            "lat": coverage_lat, "lon": coverage_lon,
             "radius_nm": coverage_nm, "provider": adsb_provider,
             "count": len(adsb_tracks), "error": adsb_error, "notes": adsb_notes,
         }

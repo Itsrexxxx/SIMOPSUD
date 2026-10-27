@@ -108,6 +108,7 @@ export default function SituationalOverview() {
   const [coverage, setCoverage] = useState(null);
   const [status, setStatus] = useState('In-Flight');
   const [airbaseId, setAirbaseId] = useState('');
+  const [scope, setScope] = useState('national');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -129,7 +130,7 @@ export default function SituationalOverview() {
     try {
       setError('');
       setLoading(true);
-      const response = await situationalOverviewAPI.getTracks({ status, airbase_id: airbaseId || undefined, q: query || undefined });
+      const response = await situationalOverviewAPI.getTracks({ status, airbase_id: airbaseId || undefined, q: query || undefined, scope });
       if (requestId !== requestRef.current) return;
       const nextAirbases = response.data?.airbases || [];
       setTracks(response.data?.tracks || []);
@@ -148,7 +149,7 @@ export default function SituationalOverview() {
     } finally {
       if (requestId === requestRef.current) setLoading(false);
     }
-  }, [status, airbaseId, query]);
+  }, [status, airbaseId, query, scope]);
 
   useEffect(() => {
     const debounce = setTimeout(() => setQuery(search.trim()), 350);
@@ -177,12 +178,14 @@ export default function SituationalOverview() {
 
   const mapAirbases = airbases.filter((base) => base.coordinate_valid !== false && base.lat != null && base.lon != null);
   const center = mapAirbases[0] ? [mapAirbases[0].lat, mapAirbases[0].lon] : [-2.5, 118];
+  const rowsLimit = 200;
   const virtualCount = telemetry?.virtual_count ?? 0;
   const providerError = telemetry?.provider_error || '';
   const providerNotes = telemetry?.provider_notes || [];
+  const nationalScope = scope === 'national';
   const coverageText = coverage
     ? `${coverage.base_name} · radius ${num(coverage.radius_nm)} nm · ${coverage.provider || 'provider tidak menjawab'}`
-    : 'tidak ada lanud berkoordinat valid untuk coverage';
+    : nationalScope ? 'cakupan nasional belum dijawab provider' : 'tidak ada lanud berkoordinat valid untuk coverage';
 
   const attention = useMemo(() => {
     const items = [];
@@ -298,7 +301,7 @@ export default function SituationalOverview() {
                 <ScaleControl position="bottomright" imperial={false} />
                 <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} />
                 <MapFocus target={focus} />
-                {coverage && (
+                {coverage && coverage.scope !== 'national' && (
                   <Circle center={[coverage.lat, coverage.lon]} radius={Number(coverage.radius_nm || 250) * 1852} pathOptions={{ color: cssVar('--status-grounding', '#0284c7'), weight: 1, dashArray: '6 6', fillOpacity: 0.05 }} />
                 )}
                 {adsbTracks.filter((item) => item.latitude != null && item.longitude != null).map((item) => (
@@ -437,16 +440,25 @@ export default function SituationalOverview() {
                   {['In-Flight', 'Scheduled', 'Arrived', 'Cancelled'].map((item) => <option key={item}>{item}</option>)}
                 </select>
               </label>
-              <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>Lanud (misi + coverage ADSB)
+              <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>Lanud (filter misi{nationalScope ? '' : ' + pusat coverage'})
                 <select value={airbaseId} onChange={(event) => setAirbaseId(event.target.value)} className="rounded-lg border px-2 py-1.5 text-sm font-normal" style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)' }}>
                   <option value="">Semua Lanud</option>
                   {allAirbases.map((base) => <option key={base.id} value={base.id}>{base.code || base.name} — {base.name}</option>)}
+                </select>
+              </label>
+              <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>Cakupan traffic ADSB
+                <select value={scope} onChange={(event) => setScope(event.target.value)} className="rounded-lg border px-2 py-1.5 text-sm font-normal" style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)' }}>
+                  <option value="national">Seluruh Indonesia</option>
+                  <option value="base">Sekitar satu lanud</option>
                 </select>
               </label>
               <label className="flex min-w-[200px] flex-[2] flex-col gap-1 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>Cari tail number / kode Lanud
                 <input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setQuery(search.trim()); }} placeholder="Contoh: A-1339 atau IWJ" className="rounded-lg border px-2 py-1.5 text-sm font-normal" style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)' }} />
               </label>
             </div>
+            {traffic.length > rowsLimit && (
+              <p className="px-4 pt-2 text-xs" style={{ color: 'var(--text-muted)' }}>Menampilkan {num(rowsLimit)} dari {num(traffic.length)} baris — persempit filter atau pakai cakupan satu lanud.</p>
+            )}
             {traffic.length === 0 ? (
               <p className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Tidak ada misi maupun traffic ADSB sesuai filter.</p>
             ) : (
@@ -463,7 +475,7 @@ export default function SituationalOverview() {
                   </tr>
                 </thead>
                 <tbody>
-                  {traffic.map((item) => (
+                  {traffic.slice(0, rowsLimit).map((item) => (
                     <tr key={item.id} onClick={() => pick(item)} className="cursor-pointer border-b last:border-b-0" style={{ borderColor: 'var(--card-border)' }}>
                       <td className="px-4 py-2 font-bold" style={{ color: 'var(--text-primary)' }}>{item.tail}</td>
                       <td className="hidden px-3 py-2 md:table-cell" style={{ color: 'var(--text-secondary)' }}>{item.source}</td>

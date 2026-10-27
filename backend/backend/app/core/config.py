@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
     ADSB_LOL_API_KEY: Optional[str] = None
     ADSB_RADIUS_NM: int = 250
+    # cakupan nasional: satu titik tengah Indonesia + radius besar (batas adsb.lol)
+    ADSB_NATIONAL_LAT: float = -2.5
+    ADSB_NATIONAL_LON: float = 118.0
+    ADSB_NATIONAL_RADIUS_NM: int = 2500
     
     @property
     def get_database_url(self) -> str:

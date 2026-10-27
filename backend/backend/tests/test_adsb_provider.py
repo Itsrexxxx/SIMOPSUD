@@ -79,7 +79,8 @@ def test_fetch_uses_primary_provider_and_normalizes(get):
 @patch("app.services.adsb_provider.requests.get")
 def test_fetch_falls_back_to_opensky_when_key_rejected(get):
     get.side_effect = [
-        _response(401, text="api key bound to a different address"),
+        _response(401, text="api key bound to a different address"),  # percobaan dengan key
+        _response(401, text="api key bound to a different address"),  # ulang tanpa key
         _response(200, {"states": [["abc123", "GIA253", "Indonesia", NOW.timestamp(), NOW.timestamp(), 112.7, -7.9, 1000.0, False, 200.0, 90.0, None, None, 1100.0]]}),
     ]
 
@@ -90,7 +91,7 @@ def test_fetch_falls_back_to_opensky_when_key_rejected(get):
     assert len(result["tracks"]) == 1
     assert "401" in result["errors"][0]
     assert "bound to a different address" in result["errors"][0]
-    assert get.call_args_list[1].kwargs["params"]["lamin"] < -7.9262
+    assert get.call_args_list[2].kwargs["params"]["lamin"] < -7.9262
 
 
 @patch("app.services.adsb_provider.settings.ADSB_LOL_API_KEY", "test-key")
@@ -106,14 +107,23 @@ def test_missing_provider_never_raises_and_explains():
 
 
 @patch("app.services.adsb_provider.settings.ADSB_LOL_API_KEY", "")
+@patch("app.services.adsb_provider.requests.get", return_value=_response(200, {"ac": []}))
+def test_missing_key_still_queries_public_adsb_lol(get):
+    """Endpoint publik adsb.lol menjawab tanpa key (fair-use) - jangan dilewati."""
+    result = fetch_provider_tracks(0, 0)
+
+    assert result["provider"] == "adsb.lol"
+    assert not (get.call_args.kwargs.get("headers") or {}).get("x-api-key")
+
+
+@patch("app.services.adsb_provider.settings.ADSB_LOL_API_KEY", "")
 @patch("app.services.adsb_provider.requests.get")
-def test_missing_key_skips_adsb_lol_and_still_queries_opensky(get):
-    get.return_value = _response(200, {"states": []})
+def test_missing_key_falls_back_to_opensky_when_adsb_lol_rejects(get):
+    get.side_effect = [_response(401, text="rejected"), _response(200, {"states": []})]
 
     result = fetch_provider_tracks(0, 0)
 
     assert result["provider"] == "OpenSky"
-    assert "API key belum diatur" in result["errors"][0]
     assert get.call_args.kwargs["params"]["lamin"] < 0
 
 
