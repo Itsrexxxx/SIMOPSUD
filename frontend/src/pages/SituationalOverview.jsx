@@ -186,10 +186,6 @@ export default function SituationalOverview() {
 
   const mapAirbases = airbases.filter((base) => base.coordinate_valid !== false && base.lat != null && base.lon != null);
   const center = mapAirbases[0] ? [mapAirbases[0].lat, mapAirbases[0].lon] : [-2.5, 118];
-  const PAGE_SIZE = 10;
-  const pageCount = Math.max(1, Math.ceil(traffic.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = traffic.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const virtualCount = telemetry?.virtual_count ?? 0;
   const providerError = telemetry?.provider_error || '';
   const providerNotes = telemetry?.provider_notes || [];
@@ -228,6 +224,11 @@ export default function SituationalOverview() {
       point: [item.latitude, item.longitude],
     })),
   ], [tracks, adsbTracks]);
+
+  const PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(traffic.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = traffic.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const finding = useMemo(() => {
     const parts = [];
