@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLAlchemyEnum
+from sqlalchemy import CheckConstraint, Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLAlchemyEnum, Text
+import json
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -8,23 +9,33 @@ from app.core.database import Base
 class FlightMissionStatus(str, Enum):
     SCHEDULED = "Scheduled"
     IN_FLIGHT = "In-Flight"
-    ARRIVED = "Arrived"
+    COMPLETED = "Completed"
+    CANCELLED = "Cancelled"
+    ARRIVED = "Arrived"  # legacy alias retained for existing records/UI
     DIVERTED = "Diverted"
+    DELAYED = "Delayed"
 
 
 class FlightMission(Base):
     __tablename__ = "flight_missions"
+    __table_args__ = (
+        CheckConstraint("origin_base_id <> destination_base_id", name="ck_flight_missions_distinct_bases"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     aircraft_id = Column(Integer, ForeignKey("aircraft_units.id"), nullable=False)
-    origin_base_id = Column(Integer, ForeignKey("air_bases.id"), nullable=False)
-    destination_base_id = Column(Integer, ForeignKey("air_bases.id"), nullable=False)
+    origin_base_id = Column(Integer, ForeignKey("air_bases.id"), nullable=True)
+    destination_base_id = Column(Integer, ForeignKey("air_bases.id"), nullable=True)
     
     scheduled_departure = Column(DateTime, default=datetime.utcnow, nullable=False)
     actual_departure = Column(DateTime, nullable=True)
     predicted_duration_minutes = Column(Float, nullable=True, default=0.0)
     predicted_arrival = Column(DateTime, nullable=True)
     actual_arrival = Column(DateTime, nullable=True)
+    eta_variance_minutes = Column(Float, nullable=True)
+    delay_reason = Column(String(500), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
     aircraft_hours_before_departure = Column(Float, nullable=True)
     status = Column(
         SQLAlchemyEnum(FlightMissionStatus, values_callable=lambda x: [e.value for e in x]),
@@ -51,7 +62,11 @@ class FlightMission(Base):
     alternate_fuel_liters = Column(Float, nullable=True, default=0.0)
     total_fuel_liters = Column(Float, nullable=True, default=0.0)
     sigmet_active = Column(String(20), nullable=True, default="NIL")
-    taf_summary = Column(String(300), nullable=True)
+    taf_summary = Column(String(300), nullable=True, default="NIL")
+    route_points_json = Column(Text, nullable=True)
+    alternate_locations_json = Column(Text, nullable=True)
+    origin_location_json = Column(Text, nullable=True)
+    destination_location_json = Column(Text, nullable=True)
     alternate_base = relationship("AirBase", foreign_keys=[alternate_base_id])
     
     created_at = Column(DateTime, default=datetime.utcnow)

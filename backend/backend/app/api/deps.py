@@ -12,6 +12,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
 	try:
 		payload = decode_token(token)
+		if payload.get("type", "access") != "access":
+			raise ValueError("Invalid token type")
 		user_id = int(payload.get("sub", ""))
 	except (ValueError, TypeError):
 		raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token tidak valid atau sudah kedaluwarsa")

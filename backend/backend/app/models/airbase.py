@@ -1,5 +1,5 @@
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Float, Enum as SQLAlchemyEnum
+from sqlalchemy import CheckConstraint, Column, Integer, String, Float, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -12,6 +12,13 @@ class AirBaseStatus(str, Enum):
 
 class AirBase(Base):
     __tablename__ = "air_bases"
+    __table_args__ = (
+        CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_air_bases_latitude"),
+        CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_air_bases_longitude"),
+        CheckConstraint("avtur_stock_liters >= 0", name="ck_air_bases_stock_nonnegative"),
+        CheckConstraint("avtur_capacity_liters >= 0", name="ck_air_bases_capacity_nonnegative"),
+        CheckConstraint("avtur_stock_liters <= avtur_capacity_liters", name="ck_air_bases_stock_capacity"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, index=True, nullable=False)
@@ -38,10 +45,14 @@ class AirBase(Base):
     # Kodau & identitas AIP
     kodau = Column(String(20), nullable=True, index=True, default="Kodau I")
     code = Column(String(10), nullable=True, index=True)
-    icao = Column(String(10), nullable=True)
+    icao = Column(String(10), nullable=True, unique=True, index=True)
     tipe = Column(String(2), nullable=True)
     runway_m = Column(Integer, nullable=True)
     elev_m = Column(Integer, nullable=True)
+    country = Column(String(100), nullable=True, default="Indonesia")
+    iata = Column(String(10), nullable=True)
+    location_type = Column(String(40), nullable=False, default="DOMESTIC_AIRBASE")
+    is_active = Column(Integer, nullable=False, default=1)
     # Militery: taxi time & alternate minima per Lanud (ponytail: ganti NOTAM real when AIP tersedia)
     taxi_time_minutes = Column(Float, default=7.0)
     alternate_minima_ceiling_ft = Column(Integer, default=1500)

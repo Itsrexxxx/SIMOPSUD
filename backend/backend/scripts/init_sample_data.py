@@ -5,11 +5,67 @@ Adjusted to match the exact schema constraints of the database:
 - AircraftUnit status only accepts: 'READY', 'MAINTENANCE', 'MANDATORY_GROUNDING'
 """
 
+import random
+from datetime import datetime, timedelta
+
 from app.core.database import SessionLocal, engine
 from app.models.aircraft import AircraftType, AircraftUnit
 from app.models.airbase import AirBase
 from app.models.scenario import OperationsScenario, ScenarioDeployment
 from sqlalchemy.exc import IntegrityError
+
+from math import asin, cos, radians, sin, sqrt
+
+
+def _distance_km(a, b):
+    """Jarak great-circle antar dua pangkalan (km), R=6371."""
+    lat1, lon1, lat2, lon2 = map(radians, [a.latitude or 0, a.longitude or 0, b.latitude or 0, b.longitude or 0])
+    h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+    return 6371.0 * 2 * asin(sqrt(h))
+
+
+# Spek aproksimasi dari data terbuka (Wikipedia/spesifikasi publik), BUKAN AFM/Skatek.
+# Toleransi kasar ±20-30%. Dipakai rumus prediksi ETA (cruise, avtur) dan tampilan tabel Tipe Pesawat.
+# payload None = jangan diisi (angka tidak meyakinkan). TBO/phase/kalender sengaja tidak disentuh:
+# itu kebijakan harwat satuan, bukan data publik.
+AIRCRAFT_TYPE_SPECS = {
+    # nama tipe: (cruise km/j, avtur L/j, range km, payload kg)
+    "Dassault Rafale F4": (900.0, 3000.0, 3700.0, 9500.0),
+    "F-16C/D Block 52 Fighting Falcon": (850.0, 2900.0, 4200.0, 7700.0),
+    "Sukhoi Su-30MK2": (900.0, 4000.0, 3000.0, 8000.0),
+    "Sukhoi Su-27SKM": (900.0, 4000.0, 3500.0, 8000.0),
+    "T-50i Golden Eagle": (750.0, 1800.0, 1850.0, 4500.0),
+    "BAE Hawk 209": (800.0, 900.0, 2500.0, 3000.0),
+    "Embraer EMB 314 Super Tucano": (520.0, 250.0, 1300.0, 1500.0),
+    "C-130J-30 Super Hercules": (540.0, 2300.0, 3300.0, 19000.0),
+    "Airbus A400M Atlas": (780.0, 4000.0, 6400.0, 37000.0),
+    "EADS CASA C-295": (480.0, 800.0, 5600.0, 9250.0),
+    "CASA/IPTN CN-235": (450.0, 700.0, 2200.0, 5900.0),
+    "Boeing 737-200 Surveiller": (780.0, 3000.0, 4200.0, None),
+    "Dassault Falcon 8X": (850.0, 1200.0, 11900.0, 2500.0),
+}
+# Penanda "belum diisi": NULL (model sekarang) atau angka default lama 650/2200/2000/5000
+# yang masih tersimpan di DB hasil seed versi sebelumnya.
+SPEC_DEFAULTS = {"cruise_speed_kmh": 650.0, "fuel_burn_lph": 2200.0, "max_range_km": 2000.0, "payload_capacity_kg": 5000.0}
+
+
+def apply_aircraft_type_specs(db):
+    """Isi spek tipe pesawat. Non-clobber: hanya kolom yang masih bernilai default."""
+    filled = 0
+    for name, values in AIRCRAFT_TYPE_SPECS.items():
+        t = db.query(AircraftType).filter_by(name=name).first()
+        if not t:
+            continue
+        for attr, value in zip(SPEC_DEFAULTS, values):
+            if value is None:
+                continue
+            current = getattr(t, attr)
+            if current is None or float(current) == SPEC_DEFAULTS[attr]:
+                setattr(t, attr, float(value))
+                filled += 1
+    db.commit()
+    return filled
+
 
 def create_sample_data():
     """Create sample data matching the exact database schema columns"""
@@ -80,6 +136,11 @@ def create_sample_data():
                 print(f"✅ Menambahkan jenis alutsista: {aircraft_type.name}")
         
         db.commit()
+
+        # --- 1b. SPEK TIPE PESAWAT (cruise/avtur/range/payload) ---
+        filled = apply_aircraft_type_specs(db)
+        if filled:
+            print(f"✅ Spek tipe pesawat diisi: {filled} kolom (hanya yang masih default)")
         
         # Mengambil referensi ID Tipe Pesawat yang baru saja dibuat
         rafale_t = db.query(AircraftType).filter_by(name="Dassault Rafale F4").first()
@@ -172,6 +233,23 @@ def create_sample_data():
                 print(f"✅ Menambahkan unit variasi AI: {unit.tail_number} ({unit.status})")
 
         db.commit()
+
+        # --- 2C. BACKFILL HARWAT (non-clobber) ---
+        # Tanpa last_service_hours/date, _derived_status menghitung hs = akumulasi
+        # sehingga unit >300 jam tampak U/S semua (79% armada palsu U/S).
+        rng = random.Random(7)
+        now = datetime.now()
+        backfilled = 0
+        for unit in db.query(AircraftUnit).all():
+            if unit.last_service_hours and unit.last_service_date:
+                continue
+            acc = float(unit.accumulated_flight_hours or 0)
+            unit.last_service_hours = max(0.0, round(acc - rng.uniform(5, 80), 1))
+            unit.last_service_date = now - timedelta(days=rng.randint(5, 35))
+            backfilled += 1
+        if backfilled:
+            db.commit()
+            print(f"✅ Backfill harwat {backfilled} unit (last_service_hours/date)")
         
         # --- 3. MEMBUAT DATA PANGKALAN UDARA (AIRBASES) ---
         # Data 24 Lanud Utama
@@ -255,9 +333,121 @@ def create_sample_data():
                         db.add(ScenarioDeployment(scenario_id=scenario.id, aircraft_id=aircraft.id))
                 print(f"✅ Menambahkan skenario operasi: {name}")
 
+        # --- 4b. KOORDINAT LANUD (dasar haversine misi) ---
+        lanud_coords = {
+            "Lanud Sultan Iskandar Muda": (3.5592, 98.6712),
+            "Lanud Soewondo": (3.5583, 98.6720),
+            "Lanud Roesmin Nurjadin": (0.4608, 101.4458),
+            "Lanud Sri Mulyono Herlambang": (-2.8992, 104.7010),
+            "Lanud Raden Sadjad": (3.9400, 108.3840),
+            "Lanud Halim Perdanakusuma": (-6.2666, 106.8908),
+            "Lanud Atang Sendjaja": (-6.5536, 106.7560),
+            "Lanud Suryadarma": (-6.5730, 107.6660),
+            "Lanud Adisutjipto": (-7.7880, 110.4320),
+            "Lanud Adi Soemarmo": (-7.5160, 110.7570),
+            "Lanud Iswahjudi": (-7.6160, 111.4340),
+            "Lanud Abdulrachman Saleh": (-7.9260, 112.7140),
+            "Lanud Supadio": (-0.1490, 109.4030),
+            "Lanud Dhomber": (-1.2680, 116.8940),
+            "Lanud Anang Busra": (3.3270, 117.5690),
+            "Lanud Sultan Hasanuddin": (-5.0620, 119.5540),
+            "Lanud Sam Ratulangi": (1.5490, 124.9260),
+            "Lanud Pattimura": (-3.7100, 128.0890),
+            "Lanud I Gusti Ngurah Rai": (-8.7480, 115.1670),
+            "Lanud El Tari": (-10.1720, 123.6710),
+            "Lanud Manuhua": (-1.1900, 136.1080),
+            "Lanud Silas Papare": (-2.5770, 140.5160),
+            "Lanud Yohanis Kapiyau": (-8.5000, 140.4000),
+            "Lanud Johannes Abraham Dimara": (-8.5200, 140.4180),
+            "Lanud Cakrawala Timur": (-2.0000, 110.0000),
+            "Lanud Garuda Selatan": (-6.0000, 120.0000),
+            "Lanud Nusantara Barat": (2.0000, 110.0000),
+            "Lanud Rajawali Utara": (0.5000, 120.0000),
+        }
+        for name, (lat, lon) in lanud_coords.items():
+            base = db.query(AirBase).filter_by(name=name).first()
+            if base and not base.latitude and not base.longitude:
+                base.latitude, base.longitude = lat, lon
+        db.commit()
+
+        # --- 5. MISI PENERBANGAN (contoh lintas status untuk uji UI/tabel) ---
+        from app.models.flight_mission import FlightMission, FlightMissionStatus
+
+        if db.query(FlightMission).count() == 0:
+            # (tail, origin, destination, status, offset_jam_dari_sekarang, FL, payload_kg)
+            mission_defs = [
+                ("TS-4501", 0, 3, FlightMissionStatus.SCHEDULED, 3, 280, 3200),
+                ("TS-4502", 1, 4, FlightMissionStatus.SCHEDULED, 5, 260, 2400),
+                ("TS-1601", 2, 5, FlightMissionStatus.SCHEDULED, 9, 300, 4100),
+                ("A-4001", 3, 1, FlightMissionStatus.SCHEDULED, 26, 240, 6800),
+                ("TS-3001", 4, 2, FlightMissionStatus.IN_FLIGHT, -0.75, 290, 2900),
+                ("AI-7301", 5, 0, FlightMissionStatus.IN_FLIGHT, -1.5, 270, 1800),
+                ("TT-5001", 2, 4, FlightMissionStatus.IN_FLIGHT, -2.25, 250, 5200),
+                ("TS-1641", 1, 3, FlightMissionStatus.ARRIVED, -6, 280, 3400),
+                ("A-1351", 5, 1, FlightMissionStatus.ARRIVED, -11, 230, 7100),
+            ]
+            now = datetime.utcnow()
+            for tail, oi, di, status, offset_hours, fl, payload in mission_defs:
+                aircraft = db.query(AircraftUnit).filter_by(tail_number=tail).first()
+                if not aircraft or len(all_airbases) <= max(oi, di):
+                    continue
+                origin, destination = all_airbases[oi], all_airbases[di]
+                if origin.id == destination.id:
+                    continue
+                distance = round(_distance_km(origin, destination), 1)
+                duration = round(distance / 780.0 * 60 + 15, 1)
+                departure = now + timedelta(hours=offset_hours)
+                arrival = departure + timedelta(minutes=duration)
+                mission = FlightMission(
+                    aircraft_id=aircraft.id,
+                    origin_base_id=origin.id,
+                    destination_base_id=destination.id,
+                    scheduled_departure=departure,
+                    predicted_duration_minutes=duration,
+                    predicted_arrival=arrival,
+                    distance_km=distance,
+                    status=status,
+                    flight_level=fl,
+                    payload_kg=payload,
+                    taxi_time_minutes=15,
+                    aircraft_hours_before_departure=float(aircraft.accumulated_flight_hours or 0.0),
+                    origin_weather_temp=29.0, origin_weather_wind_speed=14.0, origin_weather_condition="Cerah Berawan",
+                    destination_weather_temp=27.5, destination_weather_wind_speed=18.0, destination_weather_condition="Hujan Ringan",
+                    sigmet_active="NIL", taf_summary="TAF valid 6 jam, angin permukaan 12-18 kt",
+                )
+                if status == FlightMissionStatus.IN_FLIGHT:
+                    mission.actual_departure = departure
+                    mission.approved_at = departure - timedelta(minutes=40)
+                elif status == FlightMissionStatus.ARRIVED:
+                    mission.actual_departure = departure
+                    mission.actual_arrival = arrival + timedelta(minutes=7)
+                    mission.approved_at = departure - timedelta(minutes=45)
+                    mission.eta_variance_minutes = 7.0
+                db.add(mission)
+            db.commit()
+            print(f"✅ Menambahkan {len(mission_defs)} misi penerbangan contoh")
+
+        # Perbaiki misi lama yang tersimpan dengan jarak 0 (koordinat lanud belum terisi).
+        fixed = 0
+        for mission in db.query(FlightMission).filter(FlightMission.distance_km == 0).all():
+            origin = db.get(AirBase, mission.origin_base_id)
+            destination = db.get(AirBase, mission.destination_base_id)
+            if not origin or not destination:
+                continue
+            distance = round(_distance_km(origin, destination), 1)
+            if distance <= 0:
+                continue
+            duration = round(distance / 780.0 * 60 + 15, 1)
+            mission.distance_km = distance
+            mission.predicted_duration_minutes = duration
+            mission.predicted_arrival = mission.scheduled_departure + timedelta(minutes=duration)
+            fixed += 1
+        if fixed:
+            db.commit()
+            print(f"✅ Memperbaiki {fixed} misi dengan jarak 0")
+
         db.commit()
         print("\n✅ Pembuatan seluruh data sampel TNI AU berhasil diselesaikan!")
-        
     except IntegrityError as e:
         db.rollback()
         print(f"⚠️ Data sudah ada di dalam database: {e}")

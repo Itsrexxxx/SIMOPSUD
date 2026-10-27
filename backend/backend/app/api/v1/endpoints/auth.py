@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.security import create_access_token, create_reset_token, decode_token, hash_password, verify_password
+from app.core.config import settings
+from app.core.security import validate_password
+from app.core.security import check_login_rate_limit, clear_login_failures, create_access_token, create_refresh_token, create_reset_token, decode_token, hash_password, note_login_failure, verify_password
 from app.models.user import User
 from app.schemas.user_schema import ForgotPasswordRequest, LoginRequest, ProfileUpdate, ResetPasswordRequest, TokenResponse, UserCreate, UserOut
 from app.services.audit_service import log_audit
@@ -24,19 +26,41 @@ def register(item: UserCreate, request: Request, db: Session = Depends(get_db)):
 	return user
 
 @router.post("/login", response_model=TokenResponse)
-def login(item: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(item: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+	client_ip = request.client.host if request.client else "unknown"
+	if not check_login_rate_limit(client_ip):
+		raise HTTPException(status_code=429, detail="Terlalu banyak percobaan login. Coba lagi nanti.", headers={"Retry-After": str(settings.LOGIN_RATE_WINDOW_SECONDS)})
 	user = db.query(User).filter(or_(User.username == item.username, User.nip == item.username)).first()
 	if not user or not verify_password(item.password, user.hashed_password):
+		note_login_failure(client_ip)
+		log_audit(db, user=user, action="LOGIN_FAILED", resource_type="auth", detail="Kredensial login tidak valid", request=request)
 		raise HTTPException(status_code=401, detail="Username/NIP atau password salah")
 	if not user.is_approved:
+		log_audit(db, user=user, action="LOGIN_FAILED", resource_type="auth", detail="Akun belum disetujui", request=request)
 		raise HTTPException(status_code=403, detail="Akun belum disetujui Administrator")
+	clear_login_failures(client_ip)
+	refresh_token = create_refresh_token(str(user.id), user.role)
+	response.set_cookie("refresh_token", refresh_token, httponly=True, secure=settings.SECURE_COOKIES, samesite="lax", max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, path="/api/v1/auth")
 	log_audit(db, user=user, action="LOGIN", resource_type="auth", detail=f"Login {user.username}", request=request)
 	return TokenResponse(access_token=create_access_token(str(user.id), user.role), user=user)
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(current_user: User = Depends(get_current_user)):
-	"""Sliding session — perpanjang token selama user aktif. Dipanggil otomatis oleh frontend sebelum kedaluwarsa."""
-	return TokenResponse(access_token=create_access_token(str(current_user.id), current_user.role), user=current_user)
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+	refresh_token = request.cookies.get("refresh_token")
+	if not refresh_token:
+		raise HTTPException(status_code=401, detail="Refresh token tidak tersedia")
+	try:
+		payload = decode_token(refresh_token)
+		if payload.get("type") != "refresh":
+			raise ValueError("Invalid token type")
+		user = db.query(User).filter(User.id == int(payload["sub"]), User.is_approved.is_(True)).first()
+	except (ValueError, KeyError, TypeError):
+		user = None
+	if not user:
+		raise HTTPException(status_code=401, detail="Refresh token tidak valid")
+	new_refresh = create_refresh_token(str(user.id), user.role)
+	response.set_cookie("refresh_token", new_refresh, httponly=True, secure=settings.SECURE_COOKIES, samesite="lax", max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, path="/api/v1/auth")
+	return TokenResponse(access_token=create_access_token(str(user.id), user.role), user=user)
 
 @router.get("/me", response_model=UserOut)
 def current_user(current_user: User = Depends(get_current_user)):
@@ -52,7 +76,8 @@ def update_profile(item: ProfileUpdate, request: Request, current_user: User = D
 	return current_user
 
 @router.post("/logout")
-def logout(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def logout(request: Request, response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+	response.delete_cookie("refresh_token", path="/api/v1/auth")
 	log_audit(db, user=current_user, action="LOGOUT", resource_type="auth", detail=f"Logout {current_user.username}", request=request)
 	return {"message": "Logout berhasil"}
 
@@ -83,8 +108,10 @@ def reset_password(item: ResetPasswordRequest, db: Session = Depends(get_db)):
 def change_password(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 	old_password = payload.get("old_password", "")
 	new_password = payload.get("new_password", "")
-	if len(new_password) < 8:
-		raise HTTPException(status_code=422, detail="Password baru minimal 8 karakter")
+	try:
+		validate_password(new_password)
+	except ValueError as exc:
+		raise HTTPException(status_code=422, detail=str(exc)) from exc
 	if not verify_password(old_password, current_user.hashed_password):
 		raise HTTPException(status_code=400, detail="Password lama salah")
 	current_user.hashed_password = hash_password(new_password)

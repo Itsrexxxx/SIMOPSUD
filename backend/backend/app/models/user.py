@@ -27,7 +27,7 @@ class User(Base):
         username: Login username (unique, indexed for performance)
         hashed_password: Bcrypt/argon2 hashed password
         full_name: Full name of the user
-        nip: Military ID/Personnel Number (unique, indexed)
+        nip: Alphanumeric NRP/NIP personnel identity (unique, indexed)
         service_unit: Military unit/division/command
         role: User role - "Administrator", "Analyst", or "Executive"
         is_approved: Approval status (default=False, must be approved by Administrator)

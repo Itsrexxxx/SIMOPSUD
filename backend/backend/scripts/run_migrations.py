@@ -29,6 +29,7 @@ SKIP_MARKERS = (
     'check that column/key exists',
     'can\'t drop column',
     'not found',
+    'unknown column',
 )
 
 with engine.connect() as conn:
@@ -37,13 +38,18 @@ with engine.connect() as conn:
             sql = f.read().strip()
         if not sql:
             continue
-        for stmt in [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]:
+        statements = []
+        for raw in sql.split(';'):
+            lines = [line for line in raw.splitlines() if not line.strip().startswith('--')]
+            stmt = '\n'.join(lines).strip()
+            if stmt:
+                statements.append(stmt)
+        for stmt in statements:
             try:
                 conn.execute(text(stmt))
             except SQLAlchemyError as exc:
                 msg = str(exc).lower()
                 if any(marker in msg for marker in SKIP_MARKERS):
-                    print(f"[skip] {sql_file.name}: {exc.__class__.__name__}")
                     continue
                 raise
     conn.commit()

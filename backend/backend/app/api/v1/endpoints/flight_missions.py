@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any, Dict
+import json
 from fastapi import APIRouter, Depends, HTTPException, Response, Query, Request, status
-from app.api.deps import require_permissions, get_current_user
+from app.api.deps import require_permissions, require_roles, get_current_user
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.core.database import get_db
@@ -12,7 +13,7 @@ from app.models.user import User
 from app.schemas.flight_mission_schema import (
     ETAPredictionRequest, ETAPredictionResponse,
     FlightMissionCreate, FlightMissionResponse, FlightMissionStatusUpdate,
-    FlightMissionStatusSchema
+    FlightMissionStatusSchema, FlightMissionApproval
 )
 from app.services.weather_service import get_realtime_weather, calculate_haversine_distance
 from app.services.eta_prediction_model import ETAPredictionEngine
@@ -22,6 +23,52 @@ from sqlalchemy import func as _func
 
 router = APIRouter()
 eta_engine = ETAPredictionEngine()
+
+_ALLOWED_STATUS_TRANSITIONS = {
+    "Scheduled": {"In-Flight", "Cancelled"},
+    "In-Flight": {"Arrived"},
+    "Arrived": set(),
+    "Completed": set(),
+    "Cancelled": set(),
+}
+
+
+def validate_mission_transition(previous: str, next_status: str, approved: bool = True) -> None:
+    if previous == next_status:
+        return
+    if next_status == FlightMissionStatus.IN_FLIGHT.value and not approved:
+        raise HTTPException(status_code=409, detail="Approval wajib sebelum misi menjadi In-Flight")
+    if next_status not in _ALLOWED_STATUS_TRANSITIONS.get(previous, set()):
+        raise HTTPException(status_code=409, detail=f"Transisi status tidak valid: {previous} -> {next_status}")
+
+
+def calculate_eta_variance_minutes(predicted: datetime | None, actual: datetime | None) -> float | None:
+    if not predicted or not actual:
+        return None
+    if predicted.tzinfo is None:
+        predicted = predicted.replace(tzinfo=timezone.utc)
+    if actual.tzinfo is None:
+        actual = actual.replace(tzinfo=timezone.utc)
+    return round((actual - predicted).total_seconds() / 60.0, 2)
+
+
+def ensure_aircraft_available(aircraft: AircraftUnit, active_missions: list[FlightMission]) -> None:
+    if aircraft.status != "S":
+        raise HTTPException(status_code=409, detail="Pesawat harus berstatus S sebelum misi dibuat")
+    if active_missions:
+        raise HTTPException(status_code=409, detail="Pesawat sudah memiliki misi aktif")
+
+
+def _validate_stock(base: AirBase) -> None:
+    stock = float(base.avtur_stock_liters or 0)
+    capacity = float(base.avtur_capacity_liters or 0)
+    if stock < 0 or capacity < 0 or stock > capacity:
+        raise HTTPException(status_code=409, detail="Stok AVTUR harus berada antara 0 dan kapasitas")
+
+
+def _validate_same_base(origin_base_id: int, destination_base_id: int) -> None:
+    if origin_base_id == destination_base_id:
+        raise HTTPException(status_code=400, detail="Lanud Asal dan Lanud Tujuan tidak boleh sama.")
 
 
 
@@ -79,6 +126,10 @@ def _mission_payload(m: FlightMission) -> dict:
         "predicted_duration_minutes": m.predicted_duration_minutes,
         "predicted_arrival": m.predicted_arrival,
         "actual_arrival": m.actual_arrival,
+        "eta_variance_minutes": m.eta_variance_minutes,
+        "delay_reason": m.delay_reason,
+        "approved_by": m.approved_by,
+        "approved_at": m.approved_at,
         "status": m.status.value if hasattr(m.status, "value") else m.status,
         "distance_km": m.distance_km,
         "origin_weather": {
@@ -105,10 +156,23 @@ def _mission_payload(m: FlightMission) -> dict:
         "total_fuel_liters": m.total_fuel_liters,
         "sigmet_active": m.sigmet_active,
         "taf_summary": m.taf_summary,
+        "origin_location": json.loads(m.origin_location_json) if m.origin_location_json else None,
+        "destination_location": json.loads(m.destination_location_json) if m.destination_location_json else None,
+        "route_legs": json.loads(m.route_points_json or "[]"),
+        "alternate_locations": json.loads(m.alternate_locations_json or "[]"),
+        "assumptions": (["ETA belum memasukkan waktu berhenti transit"] if any(not p.get("stop_duration_minutes") for p in json.loads(m.route_points_json or "[]")[:-1]) else []),
     }
 
 
+def _location_base(location, label):
+    return type("Location", (), {"name": location.name, "latitude": location.latitude, "longitude": location.longitude, "taxi_time_minutes": 7.0})()
+
+
 def _resolve_prediction(req, aircraft, origin_base, dest_base, db: Session, departure: datetime):
+    if getattr(req, "origin_location", None):
+        origin_base = _location_base(req.origin_location, "Asal")
+    if getattr(req, "destination_location", None):
+        dest_base = _location_base(req.destination_location, "Tujuan")
     alt_base = None
     alt_dist = 0.0
     if getattr(req, "alternate_base_id", None):
@@ -147,10 +211,10 @@ def predict_flight_eta(req: ETAPredictionRequest, db: Session = Depends(get_db),
     aircraft = db.query(AircraftUnit).options(joinedload(AircraftUnit.aircraft_type)).filter(AircraftUnit.id == req.aircraft_id).first()
     origin_base = db.query(AirBase).filter(AirBase.id == req.origin_base_id).first()
     dest_base = db.query(AirBase).filter(AirBase.id == req.destination_base_id).first()
-    if not aircraft or not origin_base or not dest_base:
-        raise HTTPException(status_code=404, detail="Pesawat, Lanud Asal, atau Lanud Tujuan tidak ditemukan.")
-    if req.origin_base_id == req.destination_base_id:
-        raise HTTPException(status_code=400, detail="Lanud Asal dan Lanud Tujuan tidak boleh sama.")
+    if not aircraft or (req.origin_base_id and not origin_base) or (req.destination_base_id and not dest_base):
+        raise HTTPException(status_code=404, detail="Pesawat atau lokasi misi tidak ditemukan.")
+    if req.origin_base_id and req.destination_base_id:
+        _validate_same_base(req.origin_base_id, req.destination_base_id)
     departure = req.scheduled_departure or datetime.now(timezone.utc)
     pred, ow, dw, _, _ = _resolve_prediction(req, aircraft, origin_base, dest_base, db, departure)
     if pred.get("distance_km", 0.0) == 0.0:
@@ -161,12 +225,19 @@ def predict_flight_eta(req: ETAPredictionRequest, db: Session = Depends(get_db),
 
 
 @router.post("/", response_model=FlightMissionResponse)
-def create_flight_mission(req: FlightMissionCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
+def create_flight_mission(req: FlightMissionCreate, request: Request = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
     aircraft = db.query(AircraftUnit).options(joinedload(AircraftUnit.aircraft_type)).filter(AircraftUnit.id == req.aircraft_id).first()
     origin_base = db.query(AirBase).filter(AirBase.id == req.origin_base_id).first()
     dest_base = db.query(AirBase).filter(AirBase.id == req.destination_base_id).first()
-    if not aircraft or not origin_base or not dest_base:
-        raise HTTPException(status_code=404, detail="Pesawat, Lanud Asal, atau Lanud Tujuan tidak ditemukan.")
+    if not aircraft or (req.origin_base_id and not origin_base) or (req.destination_base_id and not dest_base):
+        raise HTTPException(status_code=404, detail="Pesawat atau lokasi misi tidak ditemukan.")
+    if req.origin_base_id and req.destination_base_id:
+        _validate_same_base(req.origin_base_id, req.destination_base_id)
+    active_missions = db.query(FlightMission).filter(
+        FlightMission.aircraft_id == aircraft.id,
+        FlightMission.status.in_([FlightMissionStatus.SCHEDULED.value, FlightMissionStatus.IN_FLIGHT.value]),
+    ).all()
+    ensure_aircraft_available(aircraft, active_missions)
     departure = req.scheduled_departure or datetime.now(timezone.utc)
     pred, ow, dw, alt_dist, taxi = _resolve_prediction(req, aircraft, origin_base, dest_base, db, departure)
     mission = FlightMission(
@@ -195,16 +266,22 @@ def create_flight_mission(req: FlightMissionCreate, request: Request, db: Sessio
         total_fuel_liters=pred.get("total_fuel_liters"),
         sigmet_active=pred.get("sigmet_active"),
         taf_summary=pred.get("taf_summary"),
+        route_points_json=json.dumps([point.model_dump() for point in sorted(req.route_points, key=lambda p: p.order)]),
+        alternate_locations_json=json.dumps([alternate.model_dump() for alternate in sorted(req.alternate_locations, key=lambda a: a.priority)]),
+        origin_location_json=json.dumps(req.origin_location.model_dump()) if req.origin_location else None,
+        destination_location_json=json.dumps(req.destination_location.model_dump()) if req.destination_location else None,
     )
     db.add(mission)
     db.commit()
     db.refresh(mission)
-    log_audit(db, user=current_user, action="CREATE", resource_type="flight_mission", resource_id=mission.id, detail=f"Misi {aircraft.tail_number} {origin_base.name}->{dest_base.name} {pred['distance_km']:.0f}km FL{req.flight_level or '-'} payload {req.payload_kg or 0}kg", klasifikasi="Terbatas", request=request)
+    origin_name = origin_base.name if origin_base else req.origin_location.name
+    destination_name = dest_base.name if dest_base else req.destination_location.name
+    log_audit(db, user=current_user, action="CREATE", resource_type="flight_mission", resource_id=mission.id, detail=f"Misi {aircraft.tail_number} {origin_name}->{destination_name} {pred['distance_km']:.0f}km FL{req.flight_level or '-'} payload {req.payload_kg or 0}kg", klasifikasi="Terbatas", request=request)
     return _mission_payload(mission)
 
 @router.get("/")
 def get_flight_missions(
-    response: Response,
+    response: Response = None,
     skip: int = 0,
     limit: int = Query(default=20, le=100),
     q: str | None = None,
@@ -234,7 +311,10 @@ def get_flight_missions(
             AirBase, FlightMission.origin_base_id == AirBase.id, isouter=True
         ).filter(or_(AircraftUnit.tail_number.ilike(like, escape="\\"), AirBase.name.ilike(like, escape="\\")))
     total = query.count()
-    response.headers["X-Total-Count"] = str(total)
+    if not isinstance(limit, int):
+        limit = 20
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total)
     missions = query.order_by(FlightMission.id.desc()).offset(skip).limit(limit).all()
     return [_mission_payload(m) for m in missions]
 
@@ -255,7 +335,7 @@ def get_flight_mission(mission_id: int, db: Session = Depends(get_db), _: object
 def update_flight_mission(
     mission_id: int,
     req: FlightMissionCreate,
-    request: Request,
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: object = Depends(require_permissions("missions")),
@@ -263,13 +343,13 @@ def update_flight_mission(
     mission = db.query(FlightMission).filter(FlightMission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="Misi Penerbangan tidak ditemukan.")
-    if req.origin_base_id == req.destination_base_id:
-        raise HTTPException(status_code=400, detail="Lanud Asal dan Lanud Tujuan tidak boleh sama.")
+    if req.origin_base_id and req.destination_base_id:
+        _validate_same_base(req.origin_base_id, req.destination_base_id)
     aircraft = db.query(AircraftUnit).options(joinedload(AircraftUnit.aircraft_type)).filter(AircraftUnit.id == req.aircraft_id).first()
     origin_base = db.query(AirBase).filter(AirBase.id == req.origin_base_id).first()
     dest_base = db.query(AirBase).filter(AirBase.id == req.destination_base_id).first()
-    if not aircraft or not origin_base or not dest_base:
-        raise HTTPException(status_code=404, detail="Pesawat, Lanud Asal, atau Lanud Tujuan tidak ditemukan.")
+    if not aircraft or (req.origin_base_id and not origin_base) or (req.destination_base_id and not dest_base):
+        raise HTTPException(status_code=404, detail="Pesawat atau lokasi misi tidak ditemukan.")
     departure = req.scheduled_departure or datetime.now(timezone.utc)
     pred, ow, dw, alt_dist, taxi = _resolve_prediction(req, aircraft, origin_base, dest_base, db, departure)
     mission.aircraft_id = req.aircraft_id
@@ -295,6 +375,10 @@ def update_flight_mission(
     mission.total_fuel_liters = pred.get("total_fuel_liters")
     mission.sigmet_active = pred.get("sigmet_active")
     mission.taf_summary = pred.get("taf_summary")
+    mission.route_points_json = json.dumps([point.model_dump() for point in sorted(req.route_points, key=lambda p: p.order)])
+    mission.alternate_locations_json = json.dumps([alternate.model_dump() for alternate in sorted(req.alternate_locations, key=lambda a: a.priority)])
+    mission.origin_location_json = json.dumps(req.origin_location.model_dump()) if req.origin_location else None
+    mission.destination_location_json = json.dumps(req.destination_location.model_dump()) if req.destination_location else None
     db.commit()
     db.refresh(mission)
     log_audit(db, user=current_user, action="UPDATE", resource_type="flight_mission", resource_id=mission_id, detail=f"Update misi {mission_id}", klasifikasi="Terbatas", request=request)
@@ -302,64 +386,121 @@ def update_flight_mission(
 
 
 def _deduct_avtur_for_mission(db: Session, mission: FlightMission):
-    """Konsumsi Avtur = total_fuel_liters (fallback predicted/60*2200). ponytail: ganti fuel_burn spesifik per tipe when data akurat tersedia."""
-    origin = db.query(AirBase).filter(AirBase.id == mission.origin_base_id).first()
+    """Kurangi Avtur sekali saat misi mulai terbang."""
+    origin = db.query(AirBase).filter(AirBase.id == mission.origin_base_id).with_for_update().first()
     if not origin:
-        return
+        raise HTTPException(status_code=404, detail="Lanud asal misi tidak ditemukan")
     liters = float(mission.total_fuel_liters or 0)
     if liters <= 0 and mission.predicted_duration_minutes:
-        # fallback: predicted menit /60 *2200 L/jam
         liters = float(mission.predicted_duration_minutes) / 60.0 * 2200.0
-    if liters <= 0:
+    if liters <= 0 or db.query(AirbaseAvturLog).filter(
+        AirbaseAvturLog.mission_id == mission.id,
+        AirbaseAvturLog.reason == "MISSION_CONSUME",
+    ).first():
         return
-    # idempotent: jangan dobel jika sudah ada log untuk mission ini
-    exists = db.query(AirbaseAvturLog).filter(AirbaseAvturLog.mission_id == mission.id, AirbaseAvturLog.reason == "MISSION_CONSUME").first()
-    if exists:
-        return
-    origin.avtur_stock_liters = max(0.0, float(origin.avtur_stock_liters or 0) - liters)
-    # live apron will be corrected via aircraft move below; still sync status
-    from app.api.v1.endpoints.airbase import _compute_status, _live_apron_count  # local import hindari cycle
+    origin.avtur_stock_liters = float(origin.avtur_stock_liters or 0) - liters
+    _validate_stock(origin)
+    from app.api.v1.endpoints.airbase import _compute_status, _live_apron_count
     live = _live_apron_count(db, origin.id)
     origin.apron_used = live
-    origin.status = _compute_status(origin.avtur_stock_liters, origin.avtur_capacity_liters, origin.refueler_trucks_active, origin.refueler_trucks_count, live, origin.apron_capacity_aircraft)
-    # also correct destination apron after aircraft move (caller handles aircraft.airbase_id)
-    db.add(AirbaseAvturLog(airbase_id=origin.id, mission_id=mission.id, delta_liters=-liters, stock_after_liters=float(origin.avtur_stock_liters), reason="MISSION_CONSUME"))
-    # destination will be refreshed outside
+    origin.status = _compute_status(
+        origin.avtur_stock_liters, origin.avtur_capacity_liters,
+        origin.refueler_trucks_active, origin.refueler_trucks_count,
+        live, origin.apron_capacity_aircraft,
+    )
+    db.add(AirbaseAvturLog(
+        airbase_id=origin.id,
+        mission_id=mission.id,
+        delta_liters=-liters,
+        stock_after_liters=float(origin.avtur_stock_liters),
+        reason="MISSION_CONSUME",
+    ))
+
+
+def _complete_mission(db: Session, mission: FlightMission):
+    """Tambah jam aktual, pindahkan unit, lalu evaluasi readiness."""
+    aircraft = db.query(AircraftUnit).options(joinedload(AircraftUnit.aircraft_type)).filter(
+        AircraftUnit.id == mission.aircraft_id
+    ).with_for_update().first()
+    if not aircraft:
+        return
+    if not mission.actual_arrival:
+        mission.actual_arrival = datetime.now(timezone.utc)
+    duration_hours = 0.0
+    if mission.actual_departure:
+        departure = mission.actual_departure
+        arrival = mission.actual_arrival
+        if departure.tzinfo is None:
+            departure = departure.replace(tzinfo=timezone.utc)
+        if arrival.tzinfo is None:
+            arrival = arrival.replace(tzinfo=timezone.utc)
+        duration_hours = max(0.0, (arrival - departure).total_seconds() / 3600.0)
+    if duration_hours <= 0:
+        duration_hours = float(mission.predicted_duration_minutes or 0) / 60.0
+    aircraft.accumulated_flight_hours = float(aircraft.accumulated_flight_hours or 0.0) + duration_hours
+    aircraft.airbase_id = mission.destination_base_id
+    from app.api.v1.endpoints.aircraft import _derived_status
+    aircraft.status = _derived_status(aircraft, aircraft.aircraft_type)
+    db.flush()
+    from app.api.v1.endpoints.airbase import _compute_status as _cs, _live_apron_count as _lac
+    for bid in (mission.origin_base_id, mission.destination_base_id):
+        base = db.query(AirBase).filter(AirBase.id == bid).first()
+        if base:
+            live = _lac(db, base.id)
+            base.apron_used = live
+            base.status = _cs(
+                base.avtur_stock_liters, base.avtur_capacity_liters,
+                base.refueler_trucks_active, base.refueler_trucks_count,
+                live, base.apron_capacity_aircraft,
+            )
+
+
+@router.post("/{mission_id}/approve")
+def approve_flight_mission(mission_id: int, approval: FlightMissionApproval, request: Request = None, db: Session = Depends(get_db), current_user: User = Depends(require_roles("Administrator", "Admin"))):
+    mission = db.query(FlightMission).filter(FlightMission.id == mission_id).first()
+    if not mission:
+        raise HTTPException(status_code=404, detail="Misi Penerbangan tidak ditemukan.")
+    mission_status = mission.status.value if hasattr(mission.status, "value") else mission.status
+    if mission_status != FlightMissionStatus.SCHEDULED.value:
+        raise HTTPException(status_code=409, detail="Hanya misi Scheduled yang dapat disetujui")
+    mission.approved_by = current_user.id
+    mission.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    log_audit(db, user=current_user, action="MISSION_APPROVED", resource_type="flight_mission", resource_id=mission_id, detail=approval.approval_note or "Misi disetujui untuk In-Flight", klasifikasi="Terbatas", request=request)
+    return {"message": "Misi disetujui", "approved_by": current_user.id, "approved_at": mission.approved_at}
 
 
 @router.patch("/{mission_id}/status")
-def update_flight_mission_status(mission_id: int, update_data: FlightMissionStatusUpdate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
+def update_flight_mission_status(mission_id: int, update_data: FlightMissionStatusUpdate, request: Request = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
     mission = db.query(FlightMission).filter(FlightMission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="Misi Penerbangan tidak ditemukan.")
     prev = mission.status.value if hasattr(mission.status, "value") else str(mission.status)
-    mission.status = update_data.status.value
+    next_status = update_data.status.value
+    approved = mission.approved_at is not None or next_status != FlightMissionStatus.IN_FLIGHT.value
+    validate_mission_transition(prev, next_status, approved=approved)
+    mission.status = next_status
     if update_data.actual_departure:
         mission.actual_departure = update_data.actual_departure
-    else:
-        if update_data.status == FlightMissionStatus.IN_FLIGHT and not mission.actual_departure:
-            mission.actual_departure = datetime.now(timezone.utc)
-    if update_data.status == FlightMissionStatus.ARRIVED:
-        if not mission.actual_arrival:
-            mission.actual_arrival = datetime.now(timezone.utc)
-        if mission.predicted_duration_minutes:
-            aircraft = db.query(AircraftUnit).filter(AircraftUnit.id == mission.aircraft_id).first()
-            if aircraft:
-                additional_hours = mission.predicted_duration_minutes / 60.0
-                aircraft.accumulated_flight_hours = float(aircraft.accumulated_flight_hours or 0.0) + additional_hours
-                aircraft.airbase_id = mission.destination_base_id
-                db.flush()
-                _deduct_avtur_for_mission(db, mission)
-                # sync apron kedua lanud
-                from app.api.v1.endpoints.airbase import _compute_status as _cs, _live_apron_count as _lac
-                for bid in (mission.origin_base_id, mission.destination_base_id):
-                    b = db.query(AirBase).filter(AirBase.id == bid).first()
-                    if not b:
-                        continue
-                    live = _lac(db, b.id)
-                    b.apron_used = live
-                    b.status = _cs(b.avtur_stock_liters, b.avtur_capacity_liters, b.refueler_trucks_active, b.refueler_trucks_count, live, b.apron_capacity_aircraft)
-    db.commit()
+    elif update_data.status.value == FlightMissionStatus.IN_FLIGHT.value and not mission.actual_departure:
+        mission.actual_departure = datetime.now(timezone.utc)
+    if update_data.actual_arrival:
+        mission.actual_arrival = update_data.actual_arrival
+    elif next_status in (FlightMissionStatus.ARRIVED.value, FlightMissionStatus.COMPLETED.value) and not mission.actual_arrival:
+        mission.actual_arrival = datetime.now(timezone.utc)
+    if update_data.delay_reason is not None:
+        mission.delay_reason = update_data.delay_reason
+    if mission.actual_arrival:
+        mission.eta_variance_minutes = calculate_eta_variance_minutes(mission.predicted_arrival, mission.actual_arrival)
+    if prev != "In-Flight" and next_status == "In-Flight":
+        _deduct_avtur_for_mission(db, mission)
+    if prev not in ("Completed", "Arrived") and next_status in ("Completed", "Arrived"):
+        _complete_mission(db, mission)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(mission)
     status_value = mission.status.value if hasattr(mission.status, "value") else mission.status
     log_audit(db, user=current_user, action="STATUS_CHANGE", resource_type="flight_mission", resource_id=mission_id, detail=f"Status misi {mission_id} {prev}->{status_value}", klasifikasi="Terbatas", request=request)
@@ -367,10 +508,12 @@ def update_flight_mission_status(mission_id: int, update_data: FlightMissionStat
 
 
 @router.delete("/{mission_id}")
-def delete_flight_mission(mission_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
+def delete_flight_mission(mission_id: int, request: Request = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), _: object = Depends(require_permissions("missions"))):
     mission = db.query(FlightMission).filter(FlightMission.id == mission_id).first()
     if not mission:
         raise HTTPException(status_code=404, detail="Misi Penerbangan tidak ditemukan.")
+    # ponytail: lepas link avtur log (riwayat tetap) agar FK lama tanpa ON DELETE tidak memblokir hapus
+    db.query(AirbaseAvturLog).filter(AirbaseAvturLog.mission_id == mission_id).update({"mission_id": None})
     db.delete(mission)
     db.commit()
     log_audit(db, user=current_user, action="DELETE", resource_type="flight_mission", resource_id=mission_id, detail=f"Hapus misi {mission_id}", klasifikasi="Terbatas", request=request)

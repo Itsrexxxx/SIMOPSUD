@@ -10,7 +10,7 @@ Endpoints for:
 All endpoints require Administrator role (verified via dependency).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Query, Request, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.deps import require_roles
@@ -24,6 +24,7 @@ from app.schemas.user_schema import (
     PendingUsersResponse,
 )
 from app.core.security import hash_password
+from app.services.audit_service import log_audit
 
 
 # ============================================================================
@@ -184,8 +185,9 @@ def get_all_users_endpoint(
 def approve_and_assign_role(
     user_id: int,
     obj_in: UserAdminUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: dict = Depends(verify_super_admin),
+    current_admin: User = Depends(verify_super_admin),
 ) -> UserApprovalResponse:
     """
     Approve a pending user registration and/or assign/update their role.
@@ -216,6 +218,7 @@ def approve_and_assign_role(
     if obj_in.permissions is not None and set(obj_in.permissions) - ALLOWED_PERMISSIONS:
         raise HTTPException(status_code=422, detail="Hak akses tidak valid")
 
+    before_permissions = list((db.query(User).filter(User.id == user_id).first() or User()).permissions or [])
     db_user = crud_user.update_user_by_admin(db, user_id=user_id, obj_in=obj_in)
     
     if not db_user:
@@ -223,6 +226,10 @@ def approve_and_assign_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found."
         )
+    if obj_in.permissions is not None and before_permissions != (db_user.permissions or []):
+        log_audit(db, user=current_admin, action="PERMISSION_CHANGE", resource_type="user", resource_id=user_id, detail=f"Permission user {user_id} diubah", klasifikasi="Terbatas", request=request)
+    if obj_in.is_approved is not None and obj_in.is_approved:
+        log_audit(db, user=current_admin, action="USER_APPROVED", resource_type="user", resource_id=user_id, detail=f"User {user_id} disetujui", request=request)
     
     approval_message = "User approved and role assigned."
     if obj_in.is_approved is True and obj_in.role is not None:

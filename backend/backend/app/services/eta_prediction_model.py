@@ -9,23 +9,29 @@ from sklearn.ensemble import RandomForestRegressor
 
 from app.services.weather_service import (
     calculate_haversine_distance,
-    calculate_bearing_deg,
-    wind_component_kmh,
     get_realtime_weather,
     get_taf_summary,
     sigmet_for_weather,
 )
+from app.services.geo_calc import calculate_air_time
 
 logger = logging.getLogger(__name__)
 
 CRUISE_SPEED_LOOKUP = {
+    # fallback kalau aircraft_types.cruise_speed_kmh NULL — angka sama dengan seed init_sample_data.py
+    "rafale": 900.0,
     "f-16": 850.0,
     "sukhoi": 900.0,
-    "t-50i": 750.0,
+    "t-50": 750.0,
+    "hawk": 800.0,
+    "tucano": 520.0,
     "c-130": 540.0,
     "hercules": 540.0,
+    "a400m": 780.0,
+    "c-295": 480.0,
+    "cn-235": 450.0,
     "boeing": 780.0,
-    "tucano": 480.0,
+    "falcon": 850.0,
 }
 
 _MODEL_DIR = Path(__file__).resolve().parent / "_models"
@@ -140,39 +146,33 @@ class ETAPredictionEngine:
         if flight_level is not None and flight_level < 100:
             cruise_eff *= 0.92
 
-        # wind component head/tail along track (bukan avg mentah)
-        track = calculate_bearing_deg(origin_lat, origin_lon, dest_lat, dest_lon)
-        # rata-rata komponen headwind dari origin & dest
-        wc_origin = wind_component_kmh(origin_weather.get("wind_speed_kmh", 0), origin_weather.get("wind_direction_deg", 0), track)
-        wc_dest = wind_component_kmh(dest_weather.get("wind_speed_kmh", 0), dest_weather.get("wind_direction_deg", 0), track)
-        wind_comp = round((wc_origin + wc_dest) / 2.0, 1)
-        # head + (tailwind -)
-        gs = cruise_eff - wind_comp
-        gs = max(gs, cruise_eff * 0.82)  # floor 82%
-
         max_weather_severity = max(
             self._get_weather_severity(origin_weather.get("weather_code", 0) or 0),
             self._get_weather_severity(dest_weather.get("weather_code", 0) or 0),
         )
-        # ML predict: fitur core [dist, cruise, |wind_comp|, severity] — |wc| untuk besaran angin
-        ml_wind = abs(wind_comp)
-        features = np.array([[distance_km, base_cruise, ml_wind, max_weather_severity]])
+        avg_wind_speed = (float(origin_weather.get("wind_speed_kmh", 0) or 0) + float(dest_weather.get("wind_speed_kmh", 0) or 0)) / 2.0
+        avg_wind_direction = (float(origin_weather.get("wind_direction_deg", 0) or 0) + float(dest_weather.get("wind_direction_deg", 0) or 0)) / 2.0
+        physics = calculate_air_time(
+            origin_lat, origin_lon, dest_lat, dest_lon, cruise_eff,
+            avg_wind_speed, avg_wind_direction, max_weather_severity,
+        )
+        distance_km = physics["distance_km"]
+        wind_comp = physics["wind_component_kmh"]
+        gs = physics["ground_speed_kmh"]
+
+        # ML is only taxi/delay buffer. Inference failure has deterministic 10-minute fallback.
+        features = np.array([[distance_km, base_cruise, abs(wind_comp), max_weather_severity]])
         try:
-            predicted_air = float(self.model.predict(features)[0])
-        except Exception:
-            fallback = RandomForestRegressor(n_estimators=100, random_state=42)
-            Xd = np.array([[200,850,10,1.0],[500,850,25,1.15],[800,540,15,1.0],[1200,900,30,1.25],[350,750,12,1.0],[600,480,20,1.1],[1500,780,18,1.0],[450,850,40,1.25]])
-            yd = np.array([16.5,42.0,94.0,98.0,30.0,84.0,120.0,41.0])
-            fallback.fit(Xd, yd)
-            predicted_air = float(fallback.predict(features)[0])
+            delay_buffer = max(0.0, float(self.model.predict(features)[0]))
+            model_status = self.model_source
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Inferensi taxi/delay buffer gagal: %s", exc)
+            delay_buffer = 10.0
+            model_status = "fallback:10-minutes"
 
-        base_minutes = (distance_km / gs) * 60.0
-        # physics severity applied to base; ML already includes weather implicitly but max() keeps worst
-        air_time = max(base_minutes * max_weather_severity, predicted_air)
-        air_time = round(float(air_time), 1)
-
+        air_time = round(float(physics["air_time_minutes"]), 1)
         taxi = float(taxi_time_minutes) if taxi_time_minutes else 0.0
-        total_duration = round(air_time + taxi, 1)
+        total_duration = round(air_time + taxi + delay_buffer, 1)
         predicted_arrival = scheduled_departure + timedelta(minutes=total_duration)
 
         # fuel: trip + alternate + reserve 10% trip + taxi fuel
@@ -217,6 +217,8 @@ class ETAPredictionEngine:
             "predicted_duration_minutes": total_duration,
             "air_time_minutes": air_time,
             "taxi_time_minutes": taxi,
+            "delay_buffer_minutes": round(delay_buffer, 1),
+            "delay_buffer_source": model_status,
             "predicted_arrival": predicted_arrival,
             "delay_risk": delay_risk,
             "delay_risk_percent": delay_risk_percent,
@@ -227,7 +229,7 @@ class ETAPredictionEngine:
             "wind_component_kmh": wind_comp,
             "wind_component_label": wc_label,
             "ground_speed_kmh": round(gs, 1),
-            "bearing_deg": track,
+            "bearing_deg": physics["bearing_deg"],
             "payload_ratio": round(payload_ratio, 2),
             "origin_weather": origin_weather,
             "destination_weather": dest_weather,

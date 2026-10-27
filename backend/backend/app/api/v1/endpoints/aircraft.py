@@ -21,6 +21,8 @@ def _escape_like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 def _derived_status(unit: AircraftUnit, typ: AircraftType | None, now: datetime | None = None) -> str:
+    if unit.is_manually_grounded or (unit.squawk_discrepancy or "").strip():
+        return "U/S"
     if not typ:
         return unit.status if unit.status in ("S", "U/S") else "S"
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)

@@ -1,5 +1,5 @@
 import re as _re
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, model_validator, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -18,16 +18,27 @@ def _validate_tail(v: str) -> str:
 class AircraftTypeBase(BaseModel):
     name: str
     description: Optional[str] = None
-    cruise_speed_kmh: Optional[float] = 650.0
+    cruise_speed_kmh: Optional[float] = None
     tbo_hours: Optional[float] = 4000.0
     phase_interval_hours: Optional[float] = 300.0
     calendar_interval_days: Optional[int] = 60
-    fuel_burn_lph: Optional[float] = 2200.0
-    max_range_km: Optional[float] = 2000.0
-    payload_capacity_kg: Optional[float] = 5000.0
+    fuel_burn_lph: Optional[float] = None
+    max_range_km: Optional[float] = None
+    payload_capacity_kg: Optional[float] = None
+
+# Spek yang dipakai rumus ETA + tampilan; tidak ada default wajar, jadi wajib diisi.
+REQUIRED_TYPE_SPECS = ("cruise_speed_kmh", "fuel_burn_lph", "max_range_km", "payload_capacity_kg")
 
 class AircraftTypeCreate(AircraftTypeBase):
-    pass
+    @model_validator(mode="after")
+    def _require_specs(self):
+        missing = [f for f in REQUIRED_TYPE_SPECS if getattr(self, f) is None]
+        if missing:
+            raise ValueError("Spek tipe wajib diisi: " + ", ".join(missing))
+        for f in REQUIRED_TYPE_SPECS:
+            if getattr(self, f) <= 0:
+                raise ValueError(f"{f} harus lebih dari 0")
+        return self
 
 class AircraftTypeUpdate(BaseModel):
     name: Optional[str] = None
@@ -53,6 +64,8 @@ class AircraftUnitBase(BaseModel):
     airbase_id: Optional[int] = None
     last_service_hours: Optional[float] = 0.0
     last_service_date: Optional[datetime] = None
+    squawk_discrepancy: Optional[str] = None
+    is_manually_grounded: bool = False
 
     @field_validator("tail_number", mode="before")
     @classmethod
@@ -70,6 +83,8 @@ class AircraftUnitUpdate(BaseModel):
     airbase_id: Optional[int] = None
     last_service_hours: Optional[float] = None
     last_service_date: Optional[datetime] = None
+    squawk_discrepancy: Optional[str] = None
+    is_manually_grounded: Optional[bool] = None
 
     @field_validator("tail_number", mode="before")
     @classmethod
@@ -87,6 +102,8 @@ class AircraftUnitResponse(BaseModel):
     airbase_id: Optional[int] = None
     last_service_hours: Optional[float] = 0.0
     last_service_date: Optional[datetime] = None
+    squawk_discrepancy: Optional[str] = None
+    is_manually_grounded: bool = False
     aircraft_type: Optional[AircraftTypeResponse] = None
     airbase: Optional["AirBaseSummary"] = None
     model_config = ConfigDict(from_attributes=True)

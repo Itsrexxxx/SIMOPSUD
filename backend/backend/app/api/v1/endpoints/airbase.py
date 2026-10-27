@@ -76,11 +76,13 @@ def _enrich(base: AirBase, db: Session) -> dict:
 
 
 def _consume_avtur(db: Session, airbase_id: int, liters: float, mission_id: int | None, reason: str):
-    base = db.query(AirBase).filter(AirBase.id == airbase_id).first()
+    base = db.query(AirBase).filter(AirBase.id == airbase_id).with_for_update().first()
     if not base or not liters or liters <= 0:
         return
     liters = float(liters)
-    base.avtur_stock_liters = max(0.0, float(base.avtur_stock_liters or 0) - liters)
+    base.avtur_stock_liters = float(base.avtur_stock_liters or 0) - liters
+    if base.avtur_stock_liters < 0:
+        raise HTTPException(status_code=409, detail="Stok AVTUR tidak boleh negatif")
     live = _live_apron_count(db, base.id)
     base.apron_used = live
     base.status = _compute_status(base.avtur_stock_liters, base.avtur_capacity_liters, base.refueler_trucks_active, base.refueler_trucks_count, live, base.apron_capacity_aircraft)
@@ -186,20 +188,24 @@ def read_avtur_logs(airbase_id: int, limit: int = Query(default=20, le=100), db:
 
 @router.post("/{airbase_id}/avtur-refill", response_model=dict)
 def refill_avtur(airbase_id: int, payload: dict, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    b = db.query(AirBase).filter(AirBase.id == airbase_id).first()
+    b = db.query(AirBase).filter(AirBase.id == airbase_id).with_for_update().first()
     if not b:
         raise HTTPException(status_code=404, detail="Airbase not found")
     liters = float(payload.get("liters") or 0)
     if liters <= 0:
         raise HTTPException(status_code=400, detail="liters harus > 0")
     b.avtur_stock_liters = float(b.avtur_stock_liters or 0) + liters
-    if b.avtur_capacity_liters and b.avtur_stock_liters > b.avtur_capacity_liters:
-        b.avtur_stock_liters = float(b.avtur_capacity_liters)
+    if b.avtur_stock_liters > float(b.avtur_capacity_liters or 0):
+        raise HTTPException(status_code=409, detail="Stok AVTUR tidak boleh melebihi kapasitas")
     live = _live_apron_count(db, b.id)
     b.apron_used = live
     b.status = _compute_status(b.avtur_stock_liters, b.avtur_capacity_liters, b.refueler_trucks_active, b.refueler_trucks_count, live, b.apron_capacity_aircraft)
     db.add(AirbaseAvturLog(airbase_id=airbase_id, mission_id=None, delta_liters=liters, stock_after_liters=float(b.avtur_stock_liters), reason="REFILL"))
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(b)
     log_audit(db, user=current_user, action="UPDATE", resource_type="airbase", resource_id=airbase_id, detail=f"Refill {liters:.0f}L {b.name}", klasifikasi="Terbatas", request=request)
     return _enrich(b, db)
@@ -207,10 +213,14 @@ def refill_avtur(airbase_id: int, payload: dict, request: Request, db: Session =
 
 @router.patch("/{airbase_id}", response_model=dict)
 def update_airbase(airbase_id: int, item: AirBaseUpdate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db_item = db.query(AirBase).filter(AirBase.id == airbase_id).first()
+    db_item = db.query(AirBase).filter(AirBase.id == airbase_id).with_for_update().first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Airbase not found")
     update_data = item.model_dump(exclude_unset=True)
+    capacity = update_data.get("avtur_capacity_liters", db_item.avtur_capacity_liters)
+    stock = update_data.get("avtur_stock_liters", db_item.avtur_stock_liters)
+    if capacity is not None and stock is not None and (capacity < 0 or stock < 0 or stock > capacity):
+        raise HTTPException(status_code=409, detail="Stok AVTUR harus berada antara 0 dan kapasitas")
     update_data.pop("apron_used", None)
     for key, value in update_data.items():
         setattr(db_item, key, value)

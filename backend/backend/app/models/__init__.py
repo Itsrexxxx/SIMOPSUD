@@ -6,3 +6,4 @@ from app.models.user import User
 from app.models.flight_mission import FlightMission
 from app.models.audit_log import AuditLog
 from app.models.airbase_avtur_log import AirbaseAvturLog
+from app.models.airbase_data import AirBaseReference, AirBaseOperational, AirBaseReadinessLog, AirBaseImportBatch, AirBaseImportRow

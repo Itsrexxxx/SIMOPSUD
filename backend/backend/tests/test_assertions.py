@@ -59,7 +59,7 @@ class AircraftTypeCRUDTest(unittest.TestCase):
         from unittest.mock import MagicMock
         req=MagicMock(spec=Request); req.client=MagicMock(); req.client.host="127.0.0.1"; req.headers={}
         user=MagicMock(); user.id=1
-        item=AircraftTypeCreate(name="F-16 Test", description="x")
+        item=AircraftTypeCreate(name="F-16 Test", description="x", cruise_speed_kmh=850, fuel_burn_lph=2900, max_range_km=4200, payload_capacity_kg=7700)
         r=create_aircraft_type(item, req, self.db, user)
         self.assertEqual(r.name, "F-16 Test")
         with self.assertRaises(Exception) as cm:
@@ -72,11 +72,18 @@ class AircraftTypeCRUDTest(unittest.TestCase):
         from fastapi import Request
         req=MagicMock(spec=Request); req.client=MagicMock(); req.client.host="127.0.0.1"; req.headers={}
         user=MagicMock(); user.id=1
-        typ=create_aircraft_type(AircraftTypeCreate(name="T-50 Test"), req, self.db, user)
+        typ=create_aircraft_type(AircraftTypeCreate(name="T-50 Test", cruise_speed_kmh=750, fuel_burn_lph=1800, max_range_km=1850, payload_capacity_kg=4500), req, self.db, user)
         self.db.add(AircraftUnit(tail_number="TS-9999", aircraft_type_id=typ.id, accumulated_flight_hours=0, status="S")); self.db.commit()
         with self.assertRaises(Exception) as cm:
             delete_aircraft_type(typ.id, req, self.db, user)
         self.assertEqual(cm.exception.status_code, 409)
+    def test_create_requires_specs(self):
+        from pydantic import ValidationError
+        from app.schemas.aircraft_schema import AircraftTypeCreate
+        with self.assertRaises(ValidationError):
+            AircraftTypeCreate(name="Tanpa Spek")
+        with self.assertRaises(ValidationError):
+            AircraftTypeCreate(name="Spek Nol", cruise_speed_kmh=0, fuel_burn_lph=2200, max_range_km=2000, payload_capacity_kg=5000)
     def test_tail_create_rejects_bad_format(self):
         from pydantic import ValidationError
         from app.schemas.aircraft_schema import AircraftUnitCreate

@@ -16,6 +16,10 @@ def _add_missing_columns() -> None:
     """
     statements = [
         ("flight_missions", "actual_arrival", "DATETIME"),
+        ("flight_missions", "eta_variance_minutes", "FLOAT"),
+        ("flight_missions", "delay_reason", "VARCHAR(500)"),
+        ("flight_missions", "approved_by", "INT"),
+        ("flight_missions", "approved_at", "DATETIME"),
         ("flight_missions", "aircraft_hours_before_departure", "FLOAT"),
         ("flight_missions", "payload_kg", "FLOAT"),
         ("flight_missions", "flight_level", "INT"),
@@ -27,10 +31,21 @@ def _add_missing_columns() -> None:
         ("flight_missions", "total_fuel_liters", "FLOAT"),
         ("flight_missions", "sigmet_active", "VARCHAR(20)"),
         ("flight_missions", "taf_summary", "VARCHAR(300)"),
+        ("flight_missions", "route_points_json", "TEXT"),
+        ("flight_missions", "alternate_locations_json", "TEXT"),
+        ("flight_missions", "origin_location_json", "TEXT"),
+        ("flight_missions", "destination_location_json", "TEXT"),
+        ("air_bases", "country", "VARCHAR(100)"),
+        ("air_bases", "iata", "VARCHAR(10)"),
+        ("air_bases", "location_type", "VARCHAR(40) NOT NULL DEFAULT 'DOMESTIC_AIRBASE'"),
+        ("air_bases", "is_active", "BOOLEAN NOT NULL DEFAULT 1"),
         ("air_bases", "taxi_time_minutes", "FLOAT"),
         ("air_bases", "alternate_minima_ceiling_ft", "INT"),
         ("air_bases", "alternate_minima_vis_m", "INT"),
         ("aircraft_types", "payload_capacity_kg", "FLOAT"),
+        ("aircraft_units", "squawk_discrepancy", "TEXT"),
+        ("aircraft_units", "is_manually_grounded", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("users", "nip", "VARCHAR(50)"),
     ]
     with engine.begin() as conn:
         backend = engine.url.get_backend_name()
@@ -55,6 +70,11 @@ def _add_missing_columns() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.is_production:
+        if settings.SECRET_KEY == "dev-only-change-me" or len(settings.SECRET_KEY) < 32:
+            raise RuntimeError("SECRET_KEY production wajib diisi dan minimal 32 karakter")
+        if not settings.SECURE_COOKIES or not settings.cors_origin_list or "*" in settings.cors_origin_list:
+            raise RuntimeError("Production wajib memakai Secure cookie dan CORS allowlist")
     # Membuat tabel secara otomatis saat startup (Cocok untuk environment dev)
     # Pada level production direkomendasikan menggunakan Alembic migrations
     Base.metadata.create_all(bind=engine)
@@ -71,10 +91,10 @@ app = FastAPI(
 # Konfigurasi CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Mengizinkan semua origin (perlu diperketat di production)
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],  # Mengizinkan semua method (GET, POST, dll)
-    allow_headers=["*"],  # Mengizinkan semua header
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     expose_headers=["X-Total-Count"],
 )
 

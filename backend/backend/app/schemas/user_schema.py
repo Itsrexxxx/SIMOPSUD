@@ -8,7 +8,9 @@ Provides strict type validation for:
 """
 
 from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from app.core.security import validate_password
 
 
 class UserBase(BaseModel):
@@ -16,7 +18,7 @@ class UserBase(BaseModel):
     
     username: str = Field(..., min_length=3, max_length=100, description="Login username")
     full_name: str = Field(..., min_length=1, max_length=150, description="Full name")
-    nip: str = Field(..., min_length=1, max_length=50, description="Military ID/Personnel Number")
+    nip: str = Field(..., min_length=1, max_length=50, description="NRP/NIP personel; alfanumerik")
     service_unit: str = Field(..., min_length=1, max_length=100, description="Military unit/division")
     email: Optional[str] = Field(None, max_length=255)
 
@@ -24,7 +26,12 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for user registration."""
     
-    password: str = Field(..., min_length=8, max_length=255, description="Plain text password (will be hashed)")
+    password: str = Field(..., min_length=12, max_length=255, description="Plain text password (will be hashed)")
+
+    @field_validator("password")
+    @classmethod
+    def password_policy(cls, value: str) -> str:
+        return validate_password(value)
 
 
 class UserAdminUpdate(BaseModel):
@@ -99,4 +106,9 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8, max_length=255)
+    new_password: str = Field(..., min_length=12, max_length=255)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_policy(cls, value: str) -> str:
+        return validate_password(value)
