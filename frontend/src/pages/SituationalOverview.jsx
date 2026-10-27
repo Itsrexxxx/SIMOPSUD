@@ -15,12 +15,18 @@ const num = (value, digits = 0) => (value === null || value === undefined || val
 const jam = (value) => (value ? new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—');
 const cssVar = (name, fallback) => (typeof document === 'undefined' ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback);
 
+const planeIcons = new Map();  // 1 ikon per 10 derajat, bukan 119 divIcon baru tiap poll
+
 function planeIcon(heading, color) {
-  return L.divIcon({
+  const key = `${Math.round((heading || 0) / 10) * 10}|${color}`;
+  if (planeIcons.has(key)) return planeIcons.get(key);
+  const icon = L.divIcon({
     className: '',
-    html: `<svg width="20" height="20" viewBox="0 0 24 24" style="transform:rotate(${heading || 0}deg)"><path d="M12 2 L19 21 L12 17.4 L5 21 Z" fill="${color}" stroke="${color}" stroke-width="1" /></svg>`,
+    html: `<svg width="20" height="20" viewBox="0 0 24 24" style="transform:rotate(${key.split('|')[0]}deg)"><path d="M12 2 L19 21 L12 17.4 L5 21 Z" fill="${color}" stroke="${color}" stroke-width="1" /></svg>`,
     iconSize: [20, 20], iconAnchor: [10, 10],
   });
+  planeIcons.set(key, icon);
+  return icon;
 }
 
 function airbaseIcon(status, code) {
@@ -109,6 +115,7 @@ export default function SituationalOverview() {
   const [status, setStatus] = useState('In-Flight');
   const [airbaseId, setAirbaseId] = useState('');
   const [scope, setScope] = useState('national');
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -157,6 +164,7 @@ export default function SituationalOverview() {
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [status, airbaseId, query, scope]);
 
   useEffect(() => {
     if (!auto) return undefined;
@@ -178,7 +186,10 @@ export default function SituationalOverview() {
 
   const mapAirbases = airbases.filter((base) => base.coordinate_valid !== false && base.lat != null && base.lon != null);
   const center = mapAirbases[0] ? [mapAirbases[0].lat, mapAirbases[0].lon] : [-2.5, 118];
-  const rowsLimit = 200;
+  const PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(traffic.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = traffic.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const virtualCount = telemetry?.virtual_count ?? 0;
   const providerError = telemetry?.provider_error || '';
   const providerNotes = telemetry?.provider_notes || [];
@@ -296,7 +307,7 @@ export default function SituationalOverview() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <div className="relative w-full flex-1 overflow-hidden rounded-xl border" style={panel}>
-              <MapContainer center={center} zoom={5} className="h-[460px] w-full lg:h-[600px]" scrollWheelZoom>
+              <MapContainer center={center} zoom={5} className="h-[520px] w-full lg:h-[720px]" scrollWheelZoom>
                 <TileLayer attribution={tiles.attr} url={tiles.url} />
                 <ScaleControl position="bottomright" imperial={false} />
                 <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} />
@@ -348,7 +359,7 @@ export default function SituationalOverview() {
               </div>
             </div>
 
-            <aside className="w-full shrink-0 rounded-xl border p-4 lg:h-[600px] lg:w-[320px] lg:overflow-y-auto" style={panel}>
+            <aside className="w-full shrink-0 rounded-xl border p-4 lg:h-[720px] lg:w-[272px] lg:overflow-y-auto" style={panel}>
               {!selection && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Pilih pesawat, misi, atau lanud di peta/daftar untuk melihat rinciannya.</p>}
 
               {selection?.type === 'mission' && (
@@ -456,9 +467,6 @@ export default function SituationalOverview() {
                 <input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setQuery(search.trim()); }} placeholder="Contoh: A-1339 atau IWJ" className="rounded-lg border px-2 py-1.5 text-sm font-normal" style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)' }} />
               </label>
             </div>
-            {traffic.length > rowsLimit && (
-              <p className="px-4 pt-2 text-xs" style={{ color: 'var(--text-muted)' }}>Menampilkan {num(rowsLimit)} dari {num(traffic.length)} baris — persempit filter atau pakai cakupan satu lanud.</p>
-            )}
             {traffic.length === 0 ? (
               <p className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Tidak ada misi maupun traffic ADSB sesuai filter.</p>
             ) : (
@@ -475,7 +483,7 @@ export default function SituationalOverview() {
                   </tr>
                 </thead>
                 <tbody>
-                  {traffic.slice(0, rowsLimit).map((item) => (
+                  {pageRows.map((item) => (
                     <tr key={item.id} onClick={() => pick(item)} className="cursor-pointer border-b last:border-b-0" style={{ borderColor: 'var(--card-border)' }}>
                       <td className="px-4 py-2 font-bold" style={{ color: 'var(--text-primary)' }}>{item.tail}</td>
                       <td className="hidden px-3 py-2 md:table-cell" style={{ color: 'var(--text-secondary)' }}>{item.source}</td>
@@ -488,6 +496,15 @@ export default function SituationalOverview() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {traffic.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
+                <span>{num((currentPage - 1) * PAGE_SIZE + 1)}–{num(Math.min(currentPage * PAGE_SIZE, traffic.length))} dari {num(traffic.length)} baris · {num(currentPage)}/{num(pageCount)} halaman</span>
+                <span className="flex items-center gap-2">
+                  <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage <= 1} className="rounded-lg border px-2.5 py-1 font-bold disabled:opacity-40" style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>Sebelumnya</button>
+                  <button type="button" onClick={() => setPage((value) => Math.min(pageCount, value + 1))} disabled={currentPage >= pageCount} className="rounded-lg border px-2.5 py-1 font-bold disabled:opacity-40" style={{ borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}>Berikutnya</button>
+                </span>
+              </div>
             )}
             <p className="border-t px-4 py-3 text-xs" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
               {adsbTracks.length === 0 ? `Traffic ADSB kosong. ${coverageText}. ` : `Sumber ADSB: ${coverageText}. `}

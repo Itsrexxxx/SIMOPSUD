@@ -18,6 +18,9 @@ MAX_RADIUS_NM = 2500  # batas atas adsb.lol; dipakai mode cakupan nasional
 FAILURE_TTL_SECONDS = 60  # ponytail: skip a provider that just failed; set to 0 once rate limits stop biting
 _cooldown: dict[str, float] = {}
 _last_error: dict[str, str] = {}
+# ponytail: cache proses tunggal - klien polling 15 s tidak menembak provider tiap kali.
+# Ganti Redis kalau nanti multi-worker dan hitungan rate limit jadi masalah.
+_cache: dict[tuple, tuple[float, dict[str, Any]]] = {}
 
 
 def _number(value: Any) -> float | None:
@@ -147,6 +150,10 @@ def fetch_provider_tracks(
 ) -> dict[str, Any]:
     """Try each provider in order. Never raises: returns tracks, who answered, and why the others failed."""
     radius_nm = int(radius or settings.ADSB_RADIUS_NM or MAX_RADIUS_NM)
+    cache_key = (round(lat, 3), round(lon, 3), radius_nm, bbox)
+    cached = _cache.get(cache_key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
     fetches = (
         ("adsb.lol", lambda: _adsb_lol_tracks(lat, lon, radius_nm, now)),
         ("OpenSky", lambda: _opensky_tracks(lat, lon, radius_nm, now, bbox)),
@@ -167,7 +174,11 @@ def fetch_provider_tracks(
             errors.append(error)
             continue
         _cooldown.pop(name, None)
-        return {"tracks": tracks or [], "provider": name, "error": None, "errors": errors, "radius_nm": radius_nm}
+        answer = {"tracks": tracks or [], "provider": name, "error": None, "errors": errors, "radius_nm": radius_nm}
+        ttl = int(getattr(settings, "ADSB_CACHE_SECONDS", 20) or 0)
+        if ttl > 0:
+            _cache[cache_key] = (time.monotonic() + ttl, answer)
+        return answer
     return {
         "tracks": [],
         "provider": None,

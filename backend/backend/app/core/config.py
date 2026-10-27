@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     # cakupan nasional: satu titik tengah Indonesia + radius besar (batas adsb.lol)
     ADSB_NATIONAL_LAT: float = -2.5
     ADSB_NATIONAL_LON: float = 118.0
-    ADSB_NATIONAL_RADIUS_NM: int = 2500
+    # 2000 nm dari titik tengah sudah menutup seluruh bbox Indonesia (sudut terjauh ~1510 nm)
+    ADSB_NATIONAL_RADIUS_NM: int = 2000
+    ADSB_CACHE_SECONDS: int = 30  # cache hasil provider; poll client 15 s tidak perlu query ulang
     
     @property
     def get_database_url(self) -> str:

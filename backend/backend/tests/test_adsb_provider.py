@@ -12,8 +12,12 @@ NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 @pytest.fixture(autouse=True)
 def _reset_cooldown():
     adsb_provider._cooldown.clear()
+    adsb_provider._last_error.clear()
+    adsb_provider._cache.clear()  # cache proses tunggal, harus bersih antar test
     yield
     adsb_provider._cooldown.clear()
+    adsb_provider._last_error.clear()
+    adsb_provider._cache.clear()
 
 
 def _response(status_code=200, payload=None, text=""):
@@ -114,6 +118,18 @@ def test_missing_key_still_queries_public_adsb_lol(get):
 
     assert result["provider"] == "adsb.lol"
     assert not (get.call_args.kwargs.get("headers") or {}).get("x-api-key")
+
+
+@patch("app.services.adsb_provider.settings.ADSB_LOL_API_KEY", "")
+@patch("app.services.adsb_provider.requests.get", return_value=_response(200, {"ac": []}))
+def test_repeat_query_served_from_cache(get):
+    """Klien polling tiap 15 s tidak boleh menembak provider tiap request."""
+    fetch_provider_tracks(-7.9262, 112.7136, 250)
+    calls_after_first = get.call_count
+
+    fetch_provider_tracks(-7.9262, 112.7136, 250)
+
+    assert get.call_count == calls_after_first
 
 
 @patch("app.services.adsb_provider.settings.ADSB_LOL_API_KEY", "")

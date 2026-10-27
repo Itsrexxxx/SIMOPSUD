@@ -168,9 +168,6 @@ def get_tracks(
                 track for track in adsb_tracks
                 if lamin <= track["latitude"] <= lamax and lomin <= track["longitude"] <= lomax
             ]
-        center = {"lat": coverage_lat, "lon": coverage_lon}
-        for track in adsb_tracks:
-            track["coverage_center"] = center
     else:
         adsb_error = "Tidak ada lanud berkoordinat valid untuk coverage ADSB"
     warnings = [
