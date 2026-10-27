@@ -20,27 +20,8 @@ router = APIRouter()
 def _escape_like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-def _derived_status(unit: AircraftUnit, typ: AircraftType | None, now: datetime | None = None) -> str:
-    if unit.is_manually_grounded or (unit.squawk_discrepancy or "").strip():
-        return "U/S"
-    if not typ:
-        return unit.status if unit.status in ("S", "U/S") else "S"
-    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
-    # TBO hard limit
-    if (unit.accumulated_flight_hours or 0) >= (typ.tbo_hours or 999999):
-        return "U/S"
-    hs = (unit.accumulated_flight_hours or 0) - (unit.last_service_hours or 0)
-    if hs >= (typ.phase_interval_hours or 300):
-        return "U/S"
-    if unit.last_service_date:
-        # last_service_date may be naive UTC from DB
-        lsd = unit.last_service_date
-        if lsd.tzinfo is not None:
-            lsd = lsd.replace(tzinfo=None)
-        ds = (now - lsd).days
-        if ds >= (typ.calendar_interval_days or 60):
-            return "U/S"
-    return "S"
+from app.services.aircraft_status import derived_status as _derived_status
+
 
 def _enrich_unit(u: AircraftUnit) -> AircraftUnit:
     # override status in-memory ke derived real, tanpa commit (real-time)

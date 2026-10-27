@@ -106,6 +106,45 @@ class OperationsIntegrationTests(unittest.TestCase):
         self.assertEqual(result["missions"]["total"], 0)
         self.assertEqual(result["aircraft"]["readiness_percent"], 0)
 
+    def test_dashboard_status_derived_matches_aircraft_module(self):
+        """Kolom status warisan (READY/MAINTENANCE) tidak boleh membuat dashboard melaporkan 0 siap."""
+        base = AirBase(name="Lanud Legacy", location="L")
+        typ = AircraftType(name="Legacy Type")
+        self.db.add_all([base, typ])
+        self.db.commit()
+        self.db.add_all([
+            AircraftUnit(tail_number="LEG-001", aircraft_type=typ, airbase=base, status="READY", accumulated_flight_hours=100),
+            AircraftUnit(tail_number="LEG-002", aircraft_type=typ, airbase=base, status="MANDATORY_GROUNDING", squawk_discrepancy="hidrolik bocor"),
+        ])
+        self.db.commit()
+
+        result = dashboard.read_dashboard_summary(db=self.db)
+        self.assertEqual(result["aircraft"]["total"], 2)
+        self.assertEqual(result["aircraft"]["ready"], 1)
+        self.assertEqual(result["aircraft"]["readiness_percent"], 50.0)
+        self.assertEqual(result["aircraft"]["per_airbase"][0]["ready"], 1)
+        self.assertEqual({row["status"] for row in result["aircraft"]["top_hours"]}, {"S", "U/S"})
+
+        from app.api.v1.endpoints import aircraft as aircraft_endpoint
+        module_stats = aircraft_endpoint.read_aircraft_stats(db=self.db)
+        self.assertEqual(result["aircraft"]["ready"], module_stats["serviceable"])
+        self.assertEqual(result["aircraft"]["unserviceable"], module_stats["unserviceable"])
+
+    def test_dashboard_ignores_inactive_airbase(self):
+        """Lanud nonaktif tidak boleh menambah total/critical/fuel_risk maupun alert."""
+        active = AirBase(name="Lanud Aktif", location="A", avtur_capacity_liters=1000, avtur_stock_liters=800)
+        inactive = AirBase(name="Lanud Nonaktif", location="N", avtur_capacity_liters=1000, avtur_stock_liters=50, is_active=0)
+        self.db.add_all([active, inactive])
+        self.db.commit()
+
+        result = dashboard.read_dashboard_summary(db=self.db)
+        self.assertEqual(result["airbases"]["total"], 1)
+        self.assertEqual(result["airbases"]["critical"], 0)
+        self.assertEqual(result["airbases"]["fuel_risk"], 0)
+        self.assertNotIn("Lanud Nonaktif", [row["name"] for row in result["airbases"]["rows"]])
+        self.assertNotIn("Lanud Nonaktif", [row["name"] for row in result["aircraft"]["per_airbase"]])
+        self.assertFalse(any("Nonaktif" in alert["title"] for alert in result["alerts"]))
+
     def test_avtur_consumption_is_idempotent(self):
         origin = AirBase(name="Lanud Fuel", location="F", avtur_capacity_liters=1000, avtur_stock_liters=1000)
         dest = AirBase(name="Lanud Fuel Dest", location="D")

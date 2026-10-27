@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import require_permissions
 from app.core.database import get_db
 from app.models.airbase import AirBase
 from app.models.aircraft import AircraftUnit
 from app.models.flight_mission import FlightMission
+from app.services.aircraft_status import derived_status
 
 router = APIRouter()
 
@@ -16,62 +16,55 @@ def read_dashboard_summary(
     db: Session = Depends(get_db),
     _: object = Depends(require_permissions("dashboard")),
 ):
-    serviceable = case((AircraftUnit.status == "S", 1), else_=0)
-    aircraft_totals = db.query(
-        func.count(AircraftUnit.id),
-        func.coalesce(func.sum(serviceable), 0),
-        func.coalesce(func.sum(AircraftUnit.accumulated_flight_hours), 0),
-        func.coalesce(func.avg(AircraftUnit.accumulated_flight_hours), 0),
-    ).one()
-    aircraft_total = int(aircraft_totals[0] or 0)
-    aircraft_ready = int(aircraft_totals[1] or 0)
+    # Status pesawat diturunkan (TBO/phase/kalender/grounded/squawk), bukan dibaca
+    # dari kolom `status` yang masih menyimpan nilai warisan -- sumber sama dengan
+    # modul Pesawat supaya angka dashboard tidak lagi berbeda.
+    units = db.query(AircraftUnit).options(joinedload(AircraftUnit.aircraft_type)).all()
+    ready_ids = {u.id for u in units if derived_status(u, u.aircraft_type) == "S"}
+    aircraft_total = len(units)
+    aircraft_ready = len(ready_ids)
+    total_hours = sum(float(u.accumulated_flight_hours or 0) for u in units)
 
-    per_airbase_rows = db.query(
-        AirBase.id,
-        AirBase.name,
-        func.count(AircraftUnit.id),
-        func.coalesce(func.sum(serviceable), 0),
-    ).outerjoin(AircraftUnit, AircraftUnit.airbase_id == AirBase.id).group_by(
-        AirBase.id, AirBase.name
-    ).order_by(func.count(AircraftUnit.id).desc(), AirBase.name).all()
-    per_airbase = [
-        {"id": row[0], "name": row[1], "total": int(row[2] or 0), "ready": int(row[3] or 0)}
-        for row in per_airbase_rows
-    ]
+    total_by_base: dict[int, int] = {}
+    ready_by_base: dict[int, int] = {}
+    for u in units:
+        if u.airbase_id is None:
+            continue
+        total_by_base[u.airbase_id] = total_by_base.get(u.airbase_id, 0) + 1
+        if u.id in ready_ids:
+            ready_by_base[u.airbase_id] = ready_by_base.get(u.airbase_id, 0) + 1
 
-    top_hours_rows = db.query(
-        AircraftUnit.tail_number,
-        AircraftUnit.accumulated_flight_hours,
-        AircraftUnit.status,
-    ).order_by(AircraftUnit.accumulated_flight_hours.desc()).limit(8).all()
+    # ponytail: hanya lanud aktif, sama seperti GET /airbase dan /airbase/stats
+    active_bases = db.query(AirBase).filter(AirBase.is_active == 1).all()
+    per_airbase = sorted(
+        (
+            {"id": b.id, "name": b.name, "total": total_by_base.get(b.id, 0), "ready": ready_by_base.get(b.id, 0)}
+            for b in active_bases
+        ),
+        key=lambda row: (-row["total"], row["name"]),
+    )
+
     top_hours = [
-        {"name": row[0], "jam": round(float(row[1] or 0), 1), "status": row[2]}
-        for row in top_hours_rows
+        {
+            "name": u.tail_number,
+            "jam": round(float(u.accumulated_flight_hours or 0), 1),
+            "status": "S" if u.id in ready_ids else "U/S",
+        }
+        for u in sorted(units, key=lambda u: float(u.accumulated_flight_hours or 0), reverse=True)[:8]
     ]
 
-    base_rows = db.query(
-        AirBase.id,
-        AirBase.name,
-        AirBase.location,
-        AirBase.status,
-        AirBase.avtur_capacity_liters,
-        AirBase.avtur_stock_liters,
-        AirBase.refueler_trucks_count,
-        AirBase.refueler_trucks_active,
-        AirBase.forklifts_count,
-    ).order_by(AirBase.kodau, AirBase.name).all()
     bases = []
-    for row in base_rows:
-        capacity = float(row[4] or 0)
-        stock = float(row[5] or 0)
+    for b in sorted(active_bases, key=lambda b: ((b.kodau or ""), b.name)):
+        capacity = float(b.avtur_capacity_liters or 0)
+        stock = float(b.avtur_stock_liters or 0)
         pct = stock / capacity * 100 if capacity > 0 else 100.0
         bases.append({
-            "id": row[0], "name": row[1], "location": row[2],
-            "status": row[3].value if hasattr(row[3], "value") else str(row[3]),
+            "id": b.id, "name": b.name, "location": b.location,
+            "status": b.status.value if hasattr(b.status, "value") else str(b.status),
             "avtur_capacity_liters": capacity, "avtur_stock_liters": stock,
-            "refueler_trucks_count": int(row[6] or 0),
-            "refueler_trucks_active": int(row[7] or 0),
-            "forklifts_count": int(row[8] or 0), "avtur_percent": round(pct, 1),
+            "refueler_trucks_count": int(b.refueler_trucks_count or 0),
+            "refueler_trucks_active": int(b.refueler_trucks_active or 0),
+            "forklifts_count": int(b.forklifts_count or 0), "avtur_percent": round(pct, 1),
         })
     avtur_chart = [
         {"name": row["name"].replace("Lanud ", "", 1)[:12],
@@ -81,20 +74,18 @@ def read_dashboard_summary(
         for row in bases[:8]
     ]
 
-    mission_rows = db.query(
-        FlightMission.status, func.count(FlightMission.id)
-    ).group_by(FlightMission.status).all()
-    mission_by_status = [
-        {"name": status.value if hasattr(status, "value") else str(status), "value": int(count)}
-        for status, count in mission_rows
-    ]
-    mission_counts = {row["name"]: row["value"] for row in mission_by_status}
-    active = sum(mission_counts.get(status, 0) for status in ("Scheduled", "In-Flight", "Delayed"))
+    mission_counts: dict[str, int] = {}
+    for (status,) in db.query(FlightMission.status).all():
+        name = status.value if hasattr(status, "value") else str(status)
+        mission_counts[name] = mission_counts.get(name, 0) + 1
+    mission_by_status = [{"name": name, "value": count} for name, count in mission_counts.items()]
+    active = sum(count for name, count in mission_counts.items() if name in ("Scheduled", "In-Flight", "Delayed"))
 
+    unserviceable = [u for u in units if u.id not in ready_ids]
     alerts = []
-    critical_aircraft = next((row for row in top_hours if row["status"] == "U/S"), None)
-    if critical_aircraft:
-        alerts.append({"tone": "critical", "title": f'{critical_aircraft["name"]} — U/S', "desc": "Pesawat berstatus unserviceable perlu ditinjau."})
+    if unserviceable:
+        tail = max(unserviceable, key=lambda u: float(u.accumulated_flight_hours or 0)).tail_number
+        alerts.append({"tone": "critical", "title": f"{tail} — U/S", "desc": f"{len(unserviceable)} pesawat unserviceable perlu ditinjau."})
     low_base = next((row for row in bases if row["avtur_percent"] < 30), None)
     if low_base:
         alerts.append({"tone": "critical", "title": f'Avtur rendah — {low_base["name"]}', "desc": f'Stok {low_base["avtur_percent"]:.1f}% kapasitas.'})
@@ -109,8 +100,8 @@ def read_dashboard_summary(
             "ready": aircraft_ready,
             "unserviceable": aircraft_total - aircraft_ready,
             "readiness_percent": round(aircraft_ready / aircraft_total * 100, 1) if aircraft_total else 0,
-            "total_hours": round(float(aircraft_totals[2] or 0), 1),
-            "average_hours": round(float(aircraft_totals[3] or 0), 1),
+            "total_hours": round(total_hours, 1),
+            "average_hours": round(total_hours / aircraft_total, 1) if aircraft_total else 0,
             "per_airbase": per_airbase[:8],
             "top_hours": top_hours,
         },
