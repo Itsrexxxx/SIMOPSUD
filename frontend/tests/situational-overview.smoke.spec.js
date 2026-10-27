@@ -41,9 +41,53 @@ test('login, open Situational Overview, render markers and survive polling', asy
   const map = page.locator('.leaflet-container');
   await expect(map).toBeVisible();
   await expect(page.getByText('Perlu perhatian')).toHaveCount(0);  // kartu dihapus: peta dapat ruang
-  expect((await map.boundingBox()).height).toBeGreaterThan(700);
+  const mapBox = await map.boundingBox();
+  expect(mapBox.width / mapBox.height).toBeGreaterThan(1.6);  // layout persegi panjang (16:9)
   await page.waitForTimeout(1000);
   await expect(map).toBeVisible();
   expect(pollCount).toBeGreaterThan(0);
   expect(pageErrors).toEqual([]);
+});
+
+test('cakupan nasional membuka peta pas satu Indonesia, bukan zoom out', async ({ page }) => {
+  await page.route('**/api/v1/auth/login', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ access_token: 'smoke-token', user: { id: 1, username: 'smoke', full_name: 'Smoke User', role: 'Analyst', permissions: ['dashboard'], is_approved: true } }),
+  }));
+  await page.route('**/api/v1/situational-overview/tracks**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      server_time: new Date().toISOString(),
+      telemetry: { mode: 'virtual', label: 'Telemetry virtual' },
+      // dua ujung archipelago: Sabang (barat) dan Merauke (timur)
+      airbases: [
+        { id: 1, name: 'Lanud Sabang', code: 'SBG', lat: 5.9, lon: 95.3, status: 'optimal', avtur_percent: 100, apron_used: 0, apron_capacity_aircraft: 4 },
+        { id: 2, name: 'Lanud Merauke', code: 'MRK', lat: -8.5, lon: 140.4, status: 'optimal', avtur_percent: 100, apron_used: 0, apron_capacity_aircraft: 4 },
+      ],
+      tracks: [],
+      adsb_tracks: [],
+    }),
+  }));
+  await page.goto('/login');
+  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Password').fill('SmokePassword123!');
+  await page.getByRole('button', { name: 'Masuk' }).click();
+  await page.goto('/situational-overview');
+  const map = page.locator('.leaflet-container');
+  await expect(map).toBeVisible();
+  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(2);
+  const box = await map.boundingBox();
+  for (const marker of await page.locator('.leaflet-marker-icon').all()) {
+    const markerBox = await marker.boundingBox();
+    expect(markerBox.x).toBeGreaterThanOrEqual(box.x - 2);
+    expect(markerBox.y).toBeGreaterThanOrEqual(box.y - 2);
+    expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(box.x + box.width + 2);
+    expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(box.y + box.height + 2);
+  }
+  // kedua ujung harus mengisi lebar peta: bukti fit rapat, bukan zoom out
+  const boxes = await Promise.all((await page.locator('.leaflet-marker-icon').all()).map((m) => m.boundingBox()));
+  const spread = Math.max(...boxes.map((b) => b.x)) - Math.min(...boxes.map((b) => b.x));
+  expect(spread).toBeGreaterThan(box.width * 0.75);
 });

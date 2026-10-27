@@ -48,18 +48,28 @@ function useDarkTheme() {
   return dark;
 }
 
-function FitMap({ airbases, tracks, adsbTracks }) {
+// bbox sama dengan INDONESIA_BBOX di backend: dipakai agar buka modul langsung pas satu Indonesia,
+// tidak ikut melorot karena satu titik menyimpang (lanud/misi/ADSB di luar bbox)
+const INDONESIA_VIEW = [[-11.5, 94.5], [6.5, 141.5]];
+
+function FitMap({ airbases, tracks, adsbTracks, national }) {
   const map = useMap();
   const [fitted, setFitted] = useState(false);
+  useEffect(() => { setFitted(false); }, [national]);  // ganti cakupan = hitung ulang tampilan
   useEffect(() => {
     if (fitted) return;
+    if (national) {
+      map.fitBounds(INDONESIA_VIEW, { padding: [0, 0], animate: false });
+      setFitted(true);
+      return;
+    }
     const points = [
       ...airbases.filter((b) => b.lat != null && b.lon != null).map((b) => [b.lat, b.lon]),
       ...tracks.flatMap((t) => [t.position, t.origin, t.destination].filter((point) => point?.lat != null && point?.lon != null).map((point) => [point.lat, point.lon])),
       ...adsbTracks.filter((t) => t.latitude != null && t.longitude != null).map((t) => [t.latitude, t.longitude]),
     ];
     if (points.length) { map.fitBounds(points, { padding: [30, 30], maxZoom: 8 }); setFitted(true); }
-  }, [airbases, tracks, adsbTracks, map, fitted]);
+  }, [airbases, tracks, adsbTracks, map, fitted, national]);
   return null;
 }
 
@@ -273,10 +283,10 @@ export default function SituationalOverview() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <div className="relative w-full flex-1 overflow-hidden rounded-xl border" style={panel}>
-              <MapContainer center={center} zoom={5} className="h-[560px] w-full lg:h-[820px]" scrollWheelZoom>
+              <MapContainer center={center} zoom={5} className="aspect-[4/3] w-full lg:aspect-[16/9] lg:h-auto" scrollWheelZoom>
                 <TileLayer attribution={tiles.attr} url={tiles.url} />
                 <ScaleControl position="bottomright" imperial={false} />
-                <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} />
+                <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} national={nationalScope} />
                 <MapFocus target={focus} />
                 {coverage && coverage.scope !== 'national' && (
                   <Circle center={[coverage.lat, coverage.lon]} radius={Number(coverage.radius_nm || 250) * 1852} pathOptions={{ color: cssVar('--status-grounding', '#0284c7'), weight: 1, dashArray: '6 6', fillOpacity: 0.05 }} />
@@ -325,7 +335,7 @@ export default function SituationalOverview() {
               </div>
             </div>
 
-            <aside className="w-full shrink-0 rounded-xl border p-4 lg:h-[820px] lg:w-[264px] lg:overflow-y-auto" style={panel}>
+            <aside className="w-full shrink-0 rounded-xl border p-4 lg:w-[264px] lg:overflow-y-auto" style={panel}>
               {!selection && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Pilih pesawat, misi, atau lanud di peta/daftar untuk melihat rinciannya.</p>}
 
               {selection?.type === 'mission' && (
