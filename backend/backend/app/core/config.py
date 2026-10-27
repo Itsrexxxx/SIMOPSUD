@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
     ADSB_LOL_API_KEY: Optional[str] = None
+    ADSB_RADIUS_NM: int = 250
     
     @property
     def get_database_url(self) -> str:
