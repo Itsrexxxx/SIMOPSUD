@@ -194,20 +194,6 @@ export default function SituationalOverview() {
     ? `${coverage.base_name} · radius ${num(coverage.radius_nm)} nm · ${coverage.provider || 'provider tidak menjawab'}`
     : nationalScope ? 'cakupan nasional belum dijawab provider' : 'tidak ada lanud berkoordinat valid untuk coverage';
 
-  const attention = useMemo(() => {
-    const items = [];
-    airbases.forEach((base) => {
-      const label = base.code || base.name;
-      if (base.status === 'critical') items.push({ key: `s-${base.id}`, tone: 'critical', label, text: 'Status lanud kritis' });
-      if (base.coordinate_warning) items.push({ key: `c-${base.id}`, tone: 'warning', label, text: `Koordinat belum valid — ${base.coordinate_warning}` });
-      if (base.avtur_capacity_liters > 0 && base.avtur_percent < 20) items.push({ key: `a-${base.id}`, tone: 'critical', label, text: `Avtur ${num(base.avtur_percent, 1)}% dari kapasitas` });
-      else if (base.avtur_capacity_liters > 0 && base.avtur_percent < 35) items.push({ key: `a-${base.id}`, tone: 'warning', label, text: `Avtur ${num(base.avtur_percent, 1)}% dari kapasitas` });
-      if (base.refueler_trucks_count > 0 && base.refueler_trucks_active < base.refueler_trucks_count) items.push({ key: `t-${base.id}`, tone: 'warning', label, text: `Truk refueler siap ${base.refueler_trucks_active}/${base.refueler_trucks_count}` });
-    });
-    if (providerError) items.push({ key: 'adsb', tone: 'warning', label: 'ADSB', text: providerError });
-    return items;
-  }, [airbases, providerError]);
-
   const traffic = useMemo(() => [
     ...tracks.map((mission) => ({
       id: `m-${mission.mission_id}`, type: 'mission', ref: mission,
@@ -278,27 +264,6 @@ export default function SituationalOverview() {
             <Cell label="Lanud" value={num(airbases.length)} note={`${num(airbases.filter((base) => base.status === 'critical').length)} kritis · ${num(airbases.filter((base) => base.status === 'warning').length)} waspada`} />
           </div>
 
-          <section className="overflow-hidden rounded-xl border" style={panel}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--card-border)' }}>
-              <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Perlu perhatian</h2>
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{attention.length ? `${attention.length} temuan urut prioritas` : 'tidak ada anomali jaringan'}</span>
-            </div>
-            {attention.length === 0 ? (
-              <p className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>Semua lanud optimal, avtur di atas 35%, truk refueler lengkap, dan provider ADSB menjawab.</p>
-            ) : (
-              <ul>
-                {attention.slice(0, 6).map((item) => (
-                  <li key={item.key} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b px-4 py-2 text-sm last:border-b-0" style={{ borderColor: 'var(--card-border)' }}>
-                    <span className="w-14 text-[11px] font-bold uppercase" style={{ color: `var(--status-${item.tone})` }}>{STATUS_LABEL[item.tone] || item.tone}</span>
-                    <button type="button" onClick={() => { const base = airbases.find((row) => (row.code || row.name) === item.label); if (base) { setSelection({ type: 'base', data: base }); setFocus([base.lat, base.lon]); } }} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>{item.label}</button>
-                    <span style={{ color: 'var(--text-secondary)' }}>{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {attention.length > 6 && <p className="px-4 py-2 text-xs" style={{ color: 'var(--text-secondary)' }}>+{attention.length - 6} temuan lain</p>}
-          </section>
-
           {error && (
             <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm" style={{ borderColor: 'var(--status-critical)', background: 'var(--status-kritis-bg)', color: 'var(--text-primary)' }}>
               <span>{error} Data terakhir dipertahankan.</span>
@@ -308,7 +273,7 @@ export default function SituationalOverview() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <div className="relative w-full flex-1 overflow-hidden rounded-xl border" style={panel}>
-              <MapContainer center={center} zoom={5} className="h-[520px] w-full lg:h-[720px]" scrollWheelZoom>
+              <MapContainer center={center} zoom={5} className="h-[560px] w-full lg:h-[820px]" scrollWheelZoom>
                 <TileLayer attribution={tiles.attr} url={tiles.url} />
                 <ScaleControl position="bottomright" imperial={false} />
                 <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} />
@@ -360,7 +325,7 @@ export default function SituationalOverview() {
               </div>
             </div>
 
-            <aside className="w-full shrink-0 rounded-xl border p-4 lg:h-[720px] lg:w-[272px] lg:overflow-y-auto" style={panel}>
+            <aside className="w-full shrink-0 rounded-xl border p-4 lg:h-[820px] lg:w-[264px] lg:overflow-y-auto" style={panel}>
               {!selection && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Pilih pesawat, misi, atau lanud di peta/daftar untuk melihat rinciannya.</p>}
 
               {selection?.type === 'mission' && (

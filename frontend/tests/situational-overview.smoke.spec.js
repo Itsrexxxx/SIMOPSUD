@@ -40,6 +40,8 @@ test('login, open Situational Overview, render markers and survive polling', asy
   await expect(page.getByText(/11–13 dari 13 baris · 2\/2 halaman/)).toBeVisible();
   const map = page.locator('.leaflet-container');
   await expect(map).toBeVisible();
+  await expect(page.getByText('Perlu perhatian')).toHaveCount(0);  // kartu dihapus: peta dapat ruang
+  expect((await map.boundingBox()).height).toBeGreaterThan(700);
   await page.waitForTimeout(1000);
   await expect(map).toBeVisible();
   expect(pollCount).toBeGreaterThan(0);
