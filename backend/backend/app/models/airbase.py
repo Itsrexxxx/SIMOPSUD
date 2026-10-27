@@ -43,7 +43,7 @@ class AirBase(Base):
     latitude = Column(Float, nullable=True, default=0.0)
     longitude = Column(Float, nullable=True, default=0.0)
     # Kodau & identitas AIP
-    kodau = Column(String(20), nullable=True, index=True, default="Koopsau I")
+    kodau = Column(String(20), nullable=True, index=True, default="Kodau I")
     code = Column(String(10), nullable=True, index=True)
     icao = Column(String(10), nullable=True, unique=True, index=True)
     tipe = Column(String(20), nullable=True)

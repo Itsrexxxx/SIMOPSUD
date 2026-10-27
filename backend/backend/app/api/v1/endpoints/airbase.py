@@ -126,20 +126,22 @@ def create_airbase(item: AirBaseCreate, request: Request, db: Session = Depends(
 
 
 @router.get("/stats", response_model=dict)
+# ponytail: hanya lanud aktif yang dihitung, sama seperti daftar di GET /airbase
 def read_airbase_stats(db: Session = Depends(get_db)):
-    total = db.query(AirBase).count()
-    optimal = db.query(AirBase).filter(AirBase.status == "optimal").count()
-    warning = db.query(AirBase).filter(AirBase.status == "warning").count()
-    critical = db.query(AirBase).filter(AirBase.status == "critical").count()
-    cap = db.query(func.coalesce(func.sum(AirBase.avtur_capacity_liters), 0)).scalar() or 0
-    stock = db.query(func.coalesce(func.sum(AirBase.avtur_stock_liters), 0)).scalar() or 0
-    trucks = db.query(func.coalesce(func.sum(AirBase.refueler_trucks_count), 0)).scalar() or 0
-    active = db.query(func.coalesce(func.sum(AirBase.refueler_trucks_active), 0)).scalar() or 0
-    apron_cap = db.query(func.coalesce(func.sum(AirBase.apron_capacity_aircraft), 0)).scalar() or 0
+    q = db.query(AirBase).filter(AirBase.is_active == 1)
+    total = q.count()
+    optimal = q.filter(AirBase.status == "optimal").count()
+    warning = q.filter(AirBase.status == "warning").count()
+    critical = q.filter(AirBase.status == "critical").count()
+    cap = q.with_entities(func.coalesce(func.sum(AirBase.avtur_capacity_liters), 0)).scalar() or 0
+    stock = q.with_entities(func.coalesce(func.sum(AirBase.avtur_stock_liters), 0)).scalar() or 0
+    trucks = q.with_entities(func.coalesce(func.sum(AirBase.refueler_trucks_count), 0)).scalar() or 0
+    active = q.with_entities(func.coalesce(func.sum(AirBase.refueler_trucks_active), 0)).scalar() or 0
+    apron_cap = q.with_entities(func.coalesce(func.sum(AirBase.apron_capacity_aircraft), 0)).scalar() or 0
     apron_used_live = db.query(func.count(AircraftUnit.id)).filter(AircraftUnit.airbase_id.isnot(None)).scalar() or 0
     below_15 = 0
     reorder_needed = 0
-    for b in db.query(AirBase).all():
+    for b in q.all():
         pct = (float(b.avtur_stock_liters or 0) / float(b.avtur_capacity_liters or 1) * 100) if (b.avtur_capacity_liters or 0) > 0 else 100
         if pct < 15:
             below_15 += 1

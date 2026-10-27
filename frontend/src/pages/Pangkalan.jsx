@@ -7,7 +7,7 @@ const emptyForm = {
   id: null,
   name: '',
   location: '',
-  kodau: 'Koopsau I',
+  kodau: 'Kodau I',
   code: '',
   icao: '',
   tipe: 'A',
@@ -26,7 +26,7 @@ const emptyForm = {
   apron_used: 0,
 };
 
-const KODAU_OPTIONS = ['Koopsau I', 'Koopsau II', 'Koopsau III', 'Kodiklatau'];
+const KODAU_OPTIONS = ['Kodau I', 'Kodau II', 'Kodau III', 'Kodiklatau'];
 
 const STATUS_TONE = { optimal: 'var(--status-aman)', warning: 'var(--status-waspada)', critical: 'var(--status-kritis)' };
 const STATUS_TEXT = { optimal: 'Optimal', warning: 'Waspada', critical: 'Kritis' };
@@ -142,7 +142,7 @@ export default function Pangkalan() {
             id: base.id,
             name: base.name || '',
             location: base.location || '',
-            kodau: base.kodau || 'Koopsau I',
+            kodau: base.kodau || 'Kodau I',
             code: base.code || '',
             icao: base.icao || '',
             tipe: base.tipe || 'A',
