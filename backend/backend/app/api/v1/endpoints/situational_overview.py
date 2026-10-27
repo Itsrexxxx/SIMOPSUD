@@ -32,7 +32,8 @@ def _airbase_payload(base: AirBase) -> dict:
     coordinate_warning = _coordinate_warning(base)
     return {
         "id": base.id, "name": base.name, "location": base.location,
-        "code": base.code, "icao": base.icao, "lat": base.latitude, "lon": base.longitude,
+        "code": base.code, "icao": base.icao, "kodau": base.kodau, "tipe": base.tipe,
+        "lat": base.latitude, "lon": base.longitude,
         "status": status, "avtur_stock_liters": stock, "avtur_capacity_liters": capacity,
         "avtur_percent": round(stock / capacity * 100, 1) if capacity > 0 else 0,
         "coordinate_valid": coordinate_warning is None,
@@ -82,7 +83,8 @@ def get_tracks(
     if invalid_statuses:
         raise HTTPException(status_code=422, detail=f"Status misi tidak valid: {', '.join(sorted(invalid_statuses))}")
 
-    airbase_query = db.query(AirBase).order_by(AirBase.name)
+    # hanya lanud aktif (daftar resmi Mabes AU); lanud nonaktif disembunyikan dari peta
+    airbase_query = db.query(AirBase).filter(AirBase.is_active == 1).order_by(AirBase.name)
     airbases = airbase_query.all()
 
     mission_query = (

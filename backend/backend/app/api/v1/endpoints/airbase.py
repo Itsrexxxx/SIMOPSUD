@@ -156,9 +156,13 @@ def read_airbases(
     q: Optional[str] = None,
     status: Optional[str] = None,
     kodau: Optional[str] = None,
+    include_inactive: bool = False,
     db: Session = Depends(get_db),
 ):
     query = db.query(AirBase)
+    if not include_inactive:
+        # lanud di luar daftar resmi Mabes AU dinonaktifkan, bukan dihapus (scripts/sync_lanud.py)
+        query = query.filter(AirBase.is_active == 1)
     if q:
         like = f"%{_escape_like(q)}%"
         query = query.filter(or_(AirBase.name.ilike(like, escape="\\"), AirBase.location.ilike(like, escape="\\"), AirBase.code.ilike(like, escape="\\"), AirBase.icao.ilike(like, escape="\\")))

@@ -7,7 +7,7 @@ const emptyForm = {
   id: null,
   name: '',
   location: '',
-  kodau: 'Kodau I',
+  kodau: 'Koopsau I',
   code: '',
   icao: '',
   tipe: 'A',
@@ -26,7 +26,7 @@ const emptyForm = {
   apron_used: 0,
 };
 
-const KODAU_OPTIONS = ['Kodau I', 'Kodau II', 'Kodau III'];
+const KODAU_OPTIONS = ['Koopsau I', 'Koopsau II', 'Koopsau III', 'Kodiklatau'];
 
 const STATUS_TONE = { optimal: 'var(--status-aman)', warning: 'var(--status-waspada)', critical: 'var(--status-kritis)' };
 const STATUS_TEXT = { optimal: 'Optimal', warning: 'Waspada', critical: 'Kritis' };
@@ -142,7 +142,7 @@ export default function Pangkalan() {
             id: base.id,
             name: base.name || '',
             location: base.location || '',
-            kodau: base.kodau || 'Kodau I',
+            kodau: base.kodau || 'Koopsau I',
             code: base.code || '',
             icao: base.icao || '',
             tipe: base.tipe || 'A',
@@ -169,7 +169,7 @@ export default function Pangkalan() {
     const num = (v) => (v === '' || v == null ? null : Number(v));
     if (!form.name.trim()) { alert('Nama pangkalan wajib diisi.'); return; }
     const code = form.code.trim().toUpperCase();
-    if (code.length !== 3) { alert('Kode lanud wajib 3 huruf (dipakai marker Situational Overview).'); return; }
+    if (code.length < 3 || code.length > 4) { alert('Kode lanud wajib 3-4 huruf (dipakai marker Situational Overview).'); return; }
     const icao = form.icao.trim().toUpperCase();
     if (icao && icao.length !== 4) { alert('ICAO harus 4 huruf, atau kosongkan.'); return; }
     const lat = num(form.latitude), lon = num(form.longitude);
@@ -436,12 +436,12 @@ export default function Pangkalan() {
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2">Tipe</label>
                 <select value={form.tipe} onChange={(e) => setForm({ ...form, tipe: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg">
-                  <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+                  <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="Perwakilan">Perwakilan</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2">Kode Lanud (3 huruf)</label>
-                <input required maxLength={3} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,3) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="HLP" />
+                <input required maxLength={4} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,4) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="HLP" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2">ICAO</label>
