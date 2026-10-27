@@ -7,11 +7,25 @@ from app.api.deps import get_current_user
 from app.models.airbase import AirBase
 from app.models.aircraft import AircraftUnit
 from app.models.airbase_avtur_log import AirbaseAvturLog
+from app.models.flight_mission import FlightMission
 from app.models.user import User
 from app.schemas.airbase_schema import AirBaseCreate, AirBaseResponse, AirBaseUpdate
 from app.services.audit_service import log_audit
 
 router = APIRouter()
+
+
+def _assert_unique(db: Session, data: dict, exclude_id: Optional[int] = None):
+    """name/icao unik di DB — tanpa cek ini duplikat jadi 500 IntegrityError, bukan 409."""
+    for field in ("name", "icao"):
+        value = data.get(field)
+        if not value:
+            continue
+        q = db.query(AirBase).filter(getattr(AirBase, field) == value)
+        if exclude_id:
+            q = q.filter(AirBase.id != exclude_id)
+        if q.first():
+            raise HTTPException(status_code=409, detail=f"{'Nama' if field == 'name' else 'ICAO'} '{value}' sudah dipakai pangkalan lain")
 
 
 
@@ -93,6 +107,7 @@ def _consume_avtur(db: Session, airbase_id: int, liters: float, mission_id: int 
 @router.post("/", response_model=dict)
 def create_airbase(item: AirBaseCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     data = item.model_dump()
+    _assert_unique(db, data)
     data.pop("apron_used", None)
     data["apron_used"] = 0
     data["status"] = _compute_status(data.get("avtur_stock_liters"), data.get("avtur_capacity_liters"), data.get("refueler_trucks_active"), data.get("refueler_trucks_count"), 0, data.get("apron_capacity_aircraft"))
@@ -221,9 +236,15 @@ def update_airbase(airbase_id: int, item: AirBaseUpdate, request: Request, db: S
     stock = update_data.get("avtur_stock_liters", db_item.avtur_stock_liters)
     if capacity is not None and stock is not None and (capacity < 0 or stock < 0 or stock > capacity):
         raise HTTPException(status_code=409, detail="Stok AVTUR harus berada antara 0 dan kapasitas")
+    _assert_unique(db, update_data, exclude_id=airbase_id)
     update_data.pop("apron_used", None)
+    # Edit stok manual wajib tercatat, kalau tidak riwayat avtur bolong (cuma refill yang tercatat)
+    stock_before = float(db_item.avtur_stock_liters or 0)
     for key, value in update_data.items():
         setattr(db_item, key, value)
+    stock_after = float(db_item.avtur_stock_liters or 0)
+    if abs(stock_after - stock_before) > 1e-6:
+        db.add(AirbaseAvturLog(airbase_id=db_item.id, mission_id=None, delta_liters=stock_after - stock_before, stock_after_liters=stock_after, reason="EDIT"))
     live = _live_apron_count(db, db_item.id)
     db_item.apron_used = live
     db_item.status = _compute_status(db_item.avtur_stock_liters, db_item.avtur_capacity_liters, db_item.refueler_trucks_active, db_item.refueler_trucks_count, live, db_item.apron_capacity_aircraft)
@@ -239,8 +260,13 @@ def delete_airbase(airbase_id: int, request: Request, db: Session = Depends(get_
     db_item = db.query(AirBase).filter(AirBase.id == airbase_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Airbase not found")
-    db.delete(db_item)
     name = db_item.name
+    # FK tanpa ON DELETE: lepas referensi dulu, kalau tidak hapus pangkalan berujung 500
+    db.query(AircraftUnit).filter(AircraftUnit.airbase_id == airbase_id).update({"airbase_id": None}, synchronize_session=False)
+    db.query(FlightMission).filter(FlightMission.origin_base_id == airbase_id).update({"origin_base_id": None}, synchronize_session=False)
+    db.query(FlightMission).filter(FlightMission.destination_base_id == airbase_id).update({"destination_base_id": None}, synchronize_session=False)
+    db.query(AirbaseAvturLog).filter(AirbaseAvturLog.airbase_id == airbase_id).delete(synchronize_session=False)
+    db.delete(db_item)
     db.commit()
     log_audit(db, user=current_user, action="DELETE", resource_type="airbase", resource_id=airbase_id, detail=f"Hapus pangkalan {name}", klasifikasi="Terbatas", request=request)
     return {"message": "Airbase deleted successfully"}

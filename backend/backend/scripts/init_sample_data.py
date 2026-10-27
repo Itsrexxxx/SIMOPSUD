@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from app.core.database import SessionLocal, engine
 from app.models.aircraft import AircraftType, AircraftUnit
 from app.models.airbase import AirBase
+from app.models.airbase_avtur_log import AirbaseAvturLog
+from app.models.flight_mission import FlightMission
 from app.models.scenario import OperationsScenario, ScenarioDeployment
 from sqlalchemy.exc import IntegrityError
 
@@ -293,10 +295,10 @@ def create_sample_data():
                 print(f"✅ Menambahkan pangkalan udara: {base.name}")
 
         varied_airbases = [
-            AirBase(name="Lanud Cakrawala Timur", location="Maluku Utara", status="warning", avtur_capacity_liters=450000, avtur_stock_liters=105000, special_lube_stock_liters=1200, refueler_trucks_count=4, refueler_trucks_active=1, forklifts_count=1, apron_capacity_aircraft=8, apron_used=7),
-            AirBase(name="Lanud Garuda Selatan", location="Nusa Tenggara Timur", status="critical", avtur_capacity_liters=300000, avtur_stock_liters=45000, special_lube_stock_liters=400, refueler_trucks_count=3, refueler_trucks_active=1, forklifts_count=0, apron_capacity_aircraft=6, apron_used=6),
-            AirBase(name="Lanud Nusantara Barat", location="Sumatra Selatan", status="optimal", avtur_capacity_liters=1400000, avtur_stock_liters=1250000, special_lube_stock_liters=6800, refueler_trucks_count=8, refueler_trucks_active=8, forklifts_count=5, apron_capacity_aircraft=24, apron_used=9),
-            AirBase(name="Lanud Rajawali Utara", location="Kalimantan Utara", status="warning", avtur_capacity_liters=650000, avtur_stock_liters=195000, special_lube_stock_liters=900, refueler_trucks_count=5, refueler_trucks_active=2, forklifts_count=1, apron_capacity_aircraft=10, apron_used=8),
+            AirBase(name="Lanud Sultan Babullah", location="Ternate, Maluku Utara", status="warning", avtur_capacity_liters=450000, avtur_stock_liters=105000, special_lube_stock_liters=1200, refueler_trucks_count=4, refueler_trucks_active=1, forklifts_count=1, apron_capacity_aircraft=8, apron_used=7),
+            AirBase(name="Lanud Komodo", location="Labuan Bajo, Nusa Tenggara Timur", status="critical", avtur_capacity_liters=300000, avtur_stock_liters=45000, special_lube_stock_liters=400, refueler_trucks_count=3, refueler_trucks_active=1, forklifts_count=0, apron_capacity_aircraft=6, apron_used=6),
+            AirBase(name="Lanud Haluoleo", location="Kendari, Sulawesi Tenggara", status="optimal", avtur_capacity_liters=1400000, avtur_stock_liters=1250000, special_lube_stock_liters=6800, refueler_trucks_count=8, refueler_trucks_active=8, forklifts_count=5, apron_capacity_aircraft=24, apron_used=9),
+            AirBase(name="Lanud Maimun Saleh", location="Sabang, Aceh", status="warning", avtur_capacity_liters=650000, avtur_stock_liters=195000, special_lube_stock_liters=900, refueler_trucks_count=5, refueler_trucks_active=2, forklifts_count=1, apron_capacity_aircraft=10, apron_used=8),
         ]
         for base in varied_airbases:
             existing = db.query(AirBase).filter_by(name=base.name).first()
@@ -306,7 +308,24 @@ def create_sample_data():
         
         db.commit()
 
-        # Assign existing and new aircraft to real airbases for location tracking.
+        # --- 3B. BERSIHKAN LANUD FIKTIF LAMA (alihkan referensi dulu, baru hapus) ---
+        legacy_fake = ["Lanud Cakrawala Timur", "Lanud Garuda Selatan", "Lanud Nusantara Barat", "Lanud Rajawali Utara"]
+        fallback = db.query(AirBase).filter(AirBase.name.notin_(legacy_fake)).order_by(AirBase.id).first()
+        removed = 0
+        for name in legacy_fake:
+            base = db.query(AirBase).filter_by(name=name).first()
+            if not base:
+                continue
+            if fallback:
+                db.query(AircraftUnit).filter(AircraftUnit.airbase_id == base.id).update({"airbase_id": fallback.id}, synchronize_session=False)
+                db.query(FlightMission).filter(FlightMission.origin_base_id == base.id).update({"origin_base_id": fallback.id}, synchronize_session=False)
+                db.query(FlightMission).filter(FlightMission.destination_base_id == base.id).update({"destination_base_id": fallback.id}, synchronize_session=False)
+            db.query(AirbaseAvturLog).filter(AirbaseAvturLog.airbase_id == base.id).delete(synchronize_session=False)
+            db.delete(base)
+            removed += 1
+        if removed:
+            db.commit()
+            print(f"✅ Hapus {removed} lanud fiktif lama (referensi dialihkan)")
         all_airbases = db.query(AirBase).order_by(AirBase.id).all()
         all_aircraft = db.query(AircraftUnit).order_by(AircraftUnit.id).all()
         for index, aircraft in enumerate(all_aircraft):
@@ -357,12 +376,12 @@ def create_sample_data():
             "Lanud El Tari": (-10.1720, 123.6710),
             "Lanud Manuhua": (-1.1900, 136.1080),
             "Lanud Silas Papare": (-2.5770, 140.5160),
-            "Lanud Yohanis Kapiyau": (-8.5000, 140.4000),
+            "Lanud Yohanis Kapiyau": (-4.5283, 136.8886),
             "Lanud Johannes Abraham Dimara": (-8.5200, 140.4180),
-            "Lanud Cakrawala Timur": (-2.0000, 110.0000),
-            "Lanud Garuda Selatan": (-6.0000, 120.0000),
-            "Lanud Nusantara Barat": (2.0000, 110.0000),
-            "Lanud Rajawali Utara": (0.5000, 120.0000),
+            "Lanud Sultan Babullah": (0.8317, 127.3810),
+            "Lanud Komodo": (-8.4867, 119.8890),
+            "Lanud Haluoleo": (-4.0816, 122.4180),
+            "Lanud Maimun Saleh": (5.8736, 95.3394),
         }
         for name, (lat, lon) in lanud_coords.items():
             base = db.query(AirBase).filter_by(name=name).first()
@@ -370,8 +389,57 @@ def create_sample_data():
                 base.latitude, base.longitude = lat, lon
         db.commit()
 
+        # --- 4c. IDENTITAS LANUD (non-clobber) ---
+        # Tanpa code/icao, Situational Overview merender semua marker "BASE" dan
+        # dropdown jadi "Lanud X — Lanud X". Kodau juga jangan seragam "Kodau I".
+        # (code, icao, tipe, runway_m, elev_m, kodau) — aproksimasi data terbuka.
+        lanud_identitas = {
+            "Lanud Sultan Iskandar Muda": ("SIM", "WITT", "A", 3000, 20, "Kodau I"),
+            "Lanud Soewondo": ("SWO", "WIMK", "B", 2900, 35, "Kodau I"),
+            "Lanud Roesmin Nurjadin": ("RSN", "WIBB", "A", 2600, 31, "Kodau I"),
+            "Lanud Sri Mulyono Herlambang": ("SMH", "WIPP", "A", 3000, 15, "Kodau I"),
+            "Lanud Raden Sadjad": ("RSD", "WIDO", "B", 1800, 3, "Kodau I"),
+            "Lanud Halim Perdanakusuma": ("HLP", "WIHH", "A", 3000, 25, "Kodau I"),
+            "Lanud Atang Sendjaja": ("ATS", "WIAJ", "B", 2500, 165, "Kodau I"),
+            "Lanud Suryadarma": ("SDM", "WIIL", "B", 1500, 110, "Kodau I"),
+            "Lanud Adisutjipto": ("ADI", "WAHH", "B", 2200, 114, "Kodau II"),
+            "Lanud Adi Soemarmo": ("ASM", "WAHQ", "B", 2600, 128, "Kodau II"),
+            "Lanud Iswahjudi": ("IWJ", "WARI", "A", 3050, 110, "Kodau II"),
+            "Lanud Abdulrachman Saleh": ("ABD", "WARA", "A", 2000, 526, "Kodau II"),
+            "Lanud Supadio": ("SPO", "WIOO", "A", 2250, 3, "Kodau I"),
+            "Lanud Dhomber": ("DMB", "WALL", "A", 2450, 4, "Kodau II"),
+            "Lanud Anang Busra": ("ANB", "WAQQ", "B", 2500, 6, "Kodau II"),
+            "Lanud Sultan Hasanuddin": ("SHS", "WAAA", "A", 3100, 15, "Kodau II"),
+            "Lanud Sam Ratulangi": ("SMR", "WAMM", "B", 2650, 81, "Kodau II"),
+            "Lanud Pattimura": ("PTM", "WAPP", "B", 2500, 10, "Kodau III"),
+            "Lanud I Gusti Ngurah Rai": ("IGN", "WADD", "A", 3000, 4, "Kodau II"),
+            "Lanud El Tari": ("ELT", "WATT", "B", 2500, 102, "Kodau II"),
+            "Lanud Manuhua": ("MNH", "WABB", "A", 3570, 15, "Kodau III"),
+            "Lanud Silas Papare": ("SLP", "WAJJ", "B", 3000, 88, "Kodau III"),
+            "Lanud Yohanis Kapiyau": ("YKP", "WABP", "B", 2200, 30, "Kodau III"),
+            "Lanud Johannes Abraham Dimara": ("JAD", "WAKK", "B", 1850, 10, "Kodau III"),
+            "Lanud Sultan Babullah": ("TTE", "WAEE", "B", 1850, 15, "Kodau III"),
+            "Lanud Komodo": ("LBJ", "WATO", "C", 2200, 20, "Kodau II"),
+            "Lanud Haluoleo": ("KDI", "WAWL", "B", 2500, 30, "Kodau II"),
+            "Lanud Maimun Saleh": ("MUS", "WITB", "C", 1850, 5, "Kodau I"),
+        }
+        filled = 0
+        for name, (code, icao, tipe, runway, elev, kodau) in lanud_identitas.items():
+            base = db.query(AirBase).filter_by(name=name).first()
+            if not base:
+                continue
+            changed = False
+            for field, value in (("code", code), ("icao", icao), ("tipe", tipe), ("runway_m", runway), ("elev_m", elev), ("kodau", kodau)):
+                if getattr(base, field) in (None, "", "Kodau I" if field == "kodau" else None):
+                    setattr(base, field, value)
+                    changed = True
+            filled += 1 if changed else 0
+        if filled:
+            db.commit()
+            print(f"✅ Identitas lanud diisi: {filled} pangkalan (code/ICAO/tipe/runway/elev/kodau)")
+
         # --- 5. MISI PENERBANGAN (contoh lintas status untuk uji UI/tabel) ---
-        from app.models.flight_mission import FlightMission, FlightMissionStatus
+        from app.models.flight_mission import FlightMissionStatus
 
         if db.query(FlightMission).count() == 0:
             # (tail, origin, destination, status, offset_jam_dari_sekarang, FL, payload_kg)

@@ -31,6 +31,15 @@ const KODAU_OPTIONS = ['Kodau I', 'Kodau II', 'Kodau III'];
 const STATUS_TONE = { optimal: 'var(--status-aman)', warning: 'var(--status-waspada)', critical: 'var(--status-kritis)' };
 const STATUS_TEXT = { optimal: 'Optimal', warning: 'Waspada', critical: 'Kritis' };
 
+const fmtNum = (v, suffix = '') => (v == null || v === '' ? '—' : `${Number(v).toLocaleString('id-ID')}${suffix}`);
+
+const FacilityStat = ({ label, value, tone }) => (
+  <div>
+    <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>{label}</p>
+    <p className="mt-0.5 font-mono text-sm tabular-nums" style={{ color: tone || 'var(--text-primary)' }}>{value}</p>
+  </div>
+);
+
 function Chip({ tone, children }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>
@@ -91,10 +100,12 @@ export default function Pangkalan() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [kodau, setKodau] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState('nama');
   const [stats, setStats] = useState(null);
 
   useEffect(() => { const t = setTimeout(() => setDebouncedQ(q.trim()), 350); return () => clearTimeout(t); }, [q]);
-  useEffect(() => { setPage(1); }, [debouncedQ, kodau]);
+  useEffect(() => { setPage(1); }, [debouncedQ, kodau, statusFilter]);
 
   const loadAirbases = async () => {
     try {
@@ -102,6 +113,7 @@ export default function Pangkalan() {
       const params = { skip: (page - 1) * pageSize, limit: pageSize };
       if (debouncedQ) params.q = debouncedQ;
       if (kodau) params.kodau = kodau;
+      if (statusFilter) params.status = statusFilter;
       const [airbaseResponse, aircraftResponse, statsResponse] = await Promise.all([
         airbaseAPI.getAll(params),
         aircraftAPI.getUnits({ limit: 100 }),
@@ -121,7 +133,7 @@ export default function Pangkalan() {
     }
   };
 
-  useEffect(() => { setLoading(true); loadAirbases(); /* eslint-disable-next-line */ }, [page, pageSize, debouncedQ, kodau]);
+  useEffect(() => { setLoading(true); loadAirbases(); /* eslint-disable-next-line */ }, [page, pageSize, debouncedQ, kodau, statusFilter]);
 
   const openForm = (base = null) => {
     setForm(
@@ -154,14 +166,29 @@ export default function Pangkalan() {
   };
 
   const saveBase = async () => {
+    const num = (v) => (v === '' || v == null ? null : Number(v));
     if (!form.name.trim()) { alert('Nama pangkalan wajib diisi.'); return; }
-    if (form.latitude < -90 || form.latitude > 90 || form.longitude < -180 || form.longitude > 180) { alert('Koordinat tidak valid.'); return; }
+    const code = form.code.trim().toUpperCase();
+    if (code.length !== 3) { alert('Kode lanud wajib 3 huruf (dipakai marker Situational Overview).'); return; }
+    const icao = form.icao.trim().toUpperCase();
+    if (icao && icao.length !== 4) { alert('ICAO harus 4 huruf, atau kosongkan.'); return; }
+    const lat = num(form.latitude), lon = num(form.longitude);
+    if (lat == null || lon == null) { alert('Latitude dan longitude wajib diisi.'); return; }
+    if (lat === 0 && lon === 0) { alert('Koordinat 0,0 bukan lokasi lanud. Isi koordinat sebenarnya.'); return; }
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) { alert('Koordinat tidak valid.'); return; }
+    const cap = num(form.avtur_capacity_liters), stock = num(form.avtur_stock_liters);
+    if (!cap || cap <= 0) { alert('Kapasitas avtur wajib > 0.'); return; }
+    if (stock == null || stock < 0 || stock > cap) { alert('Stok avtur harus antara 0 dan kapasitas.'); return; }
+    const trucks = num(form.refueler_trucks_count) ?? 0, active = num(form.refueler_trucks_active) ?? 0;
+    if (active > trucks) { alert('Truk aktif tidak boleh melebihi jumlah truk.'); return; }
     setSaving(true);
     try {
       const payload = {
         ...form,
-        latitude: Number(form.latitude || 0),
-        longitude: Number(form.longitude || 0),
+        code,
+        icao: icao || null,
+        latitude: lat,
+        longitude: lon,
         runway_m: form.runway_m ? Number(form.runway_m) : null,
         elev_m: form.elev_m ? Number(form.elev_m) : null,
         avtur_capacity_liters: Number(form.avtur_capacity_liters || 0),
@@ -222,6 +249,15 @@ export default function Pangkalan() {
   const totalStationedAircraft = st.apron_used ?? aircraftUnits.filter((u) => u.airbase_id != null).length;
   const below15 = st.below_15 ?? airbases.filter((b) => b.alert_below_15).length;
   const reorderNeeded = st.reorder_needed ?? airbases.filter((b) => b.needs_reorder).length;
+  const below15Count = st.below_15 ?? airbases.filter((b) => b.alert_below_15).length;
+
+  // urut klien-side, hanya dalam halaman aktif (API sudah paginasi)
+  const ratio = (a, b) => (Number(a || 0) / (Number(b || 0) || 1));
+  const sortedBases = [...airbases].sort((a, b) => {
+    if (sortBy === 'avtur') return ratio(a.avtur_stock_liters, a.avtur_capacity_liters) - ratio(b.avtur_stock_liters, b.avtur_capacity_liters);
+    if (sortBy === 'apron') return ratio(b.apron_used_live ?? b.apron_used, b.apron_capacity_aircraft) - ratio(a.apron_used_live ?? a.apron_used, a.apron_capacity_aircraft);
+    return (a.name || '').localeCompare(b.name || '', 'id');
+  });
 
   // status derived, ambang sama dengan backend _compute_status
   const previewStatus = (() => {
@@ -256,7 +292,7 @@ export default function Pangkalan() {
             <div className="p-4 sm:p-5">
               <p className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-muted)' }}><span className="material-symbols-outlined text-[14px]" style={{ color: 'var(--text-muted)' }} aria-hidden="true">verified</span>Status Operasional</p>
               <div className="mt-2 text-[28px] font-bold leading-none tracking-tight tabular-nums" style={{ color: 'var(--text-primary)' }}>{totalOperational}</div>
-              <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{airbases.length > 0 ? Math.round((totalOperational/airbases.length)*100) : 0}% optimal</p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{totalBases > 0 ? Math.round((totalOperational / totalBases) * 100) : 0}% optimal</p>
             </div>
             <div className="p-4 sm:p-5">
               <p className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-muted)' }}><span className="material-symbols-outlined text-[14px]" style={{ color: 'var(--text-muted)' }} aria-hidden="true">local_gas_station</span>Stok Avtur</p>
@@ -275,16 +311,17 @@ export default function Pangkalan() {
           <div className="overflow-hidden rounded-xl border" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--shadow)' }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: 'var(--card-border)' }}><h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Distribusi Status Pangkalan</h3><p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Optimal / Waspada / Kritis</p></div>
             <div className="space-y-3 p-4 sm:p-5">
-              <Meter label="Optimal" pct={totalBases > 0 ? (totalOperational / totalBases) * 100 : 0} display={`${totalOperational} lanud`} tone="var(--status-aman)" />
-              <Meter label="Waspada" pct={totalBases > 0 ? (totalWarning / totalBases) * 100 : 0} display={`${totalWarning} lanud`} tone="var(--status-waspada)" />
-              <Meter label="Kritis" pct={totalBases > 0 ? (totalCritical / totalBases) * 100 : 0} display={`${totalCritical} lanud`} tone="var(--status-kritis)" />
+              <Meter label="Optimal" pct={totalBases > 0 ? (totalOperational / totalBases) * 100 : 0} display={`${totalOperational} lanud`} tone="var(--status-aman)" note={totalBases > 0 ? `${Math.round((totalOperational / totalBases) * 100)}% dari ${totalBases} lanud` : ''} />
+              <Meter label="Waspada" pct={totalBases > 0 ? (totalWarning / totalBases) * 100 : 0} display={`${totalWarning} lanud`} tone="var(--status-waspada)" note={totalBases > 0 ? `${Math.round((totalWarning / totalBases) * 100)}% dari ${totalBases} lanud` : ''} />
+              <Meter label="Kritis" pct={totalBases > 0 ? (totalCritical / totalBases) * 100 : 0} display={`${totalCritical} lanud`} tone="var(--status-kritis)" note={totalBases > 0 ? `${Math.round((totalCritical / totalBases) * 100)}% dari ${totalBases} lanud` : ''} />
             </div>
           </div>
           <div className="overflow-hidden rounded-xl border" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--shadow)' }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: 'var(--card-border)' }}><h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Metrik Penggunaan Fasilitas</h3><p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Apron & Avtur</p></div>
             <div className="space-y-4 p-4 sm:p-5">
               <Meter label="Penggunaan Apron" pct={apronUtilization} display={`${apronUtilization}%`} tone="var(--primary)" note={`${totalApronUsed} dari ${totalApronCapacity} bay terpakai`} />
-              <Meter label="Kapasitas Bahan Bakar" pct={avgAvtur} display={`${avgAvtur}%`} tone="var(--secondary)" note={`${(totalAvturStock/1000).toFixed(0)}K dari ${(totalAvturCapacity/1000).toFixed(0)}K liter`} />
+              <Meter label="Kesiapan Truk Refueler" pct={truckReadiness} display={`${truckReadiness}%`} tone="var(--secondary)" note={`${activeRefuelingTrucks} dari ${totalRefuelingTrucks} truk siap`} />
+              <Meter label="Stok Avtur Nasional" pct={avgAvtur} display={`${avgAvtur}%`} tone={avgAvtur < 30 ? 'var(--status-kritis)' : avgAvtur < 60 ? 'var(--status-waspada)' : 'var(--status-aman)'} note={`${reorderNeeded} lanud di bawah titik reorder (15% kapasitas)`} />
             </div>
           </div>
         </div>
@@ -296,12 +333,14 @@ export default function Pangkalan() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, lokasi, kode, atau ICAO" aria-label="Cari pangkalan" className="w-full rounded-lg border py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }} />
           </div>
           <select value={kodau} onChange={(e) => setKodau(e.target.value)} aria-label="Filter Kodau" className="rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}><option value="">Semua Kodau</option>{KODAU_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}</select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter Status" className="rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}><option value="">Semua status</option><option value="optimal">Optimal</option><option value="warning">Waspada</option><option value="critical">Kritis</option></select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="Urutkan" className="rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}><option value="nama">Urut: Nama</option><option value="avtur">Urut: Avtur terendah</option><option value="apron">Urut: Apron terpakai</option></select>
         </div>
 
         {error && <div className="mb-6 rounded-lg border p-4 text-sm" style={{ borderColor: 'var(--status-kritis)', background: 'var(--status-kritis-bg)', color: 'var(--status-kritis)' }}>{error}</div>}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-slate-600"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>Memuat data pangkalan...</div>
+          <div className="flex items-center justify-center py-12 text-sm" style={{ color: 'var(--text-secondary)' }}><div className="mr-3 h-8 w-8 animate-spin rounded-full border-b-2" style={{ borderColor: 'var(--primary)' }}></div>Memuat data pangkalan...</div>
         ) : airbases.length === 0 ? (
           <div className="text-center py-12 text-slate-500">Belum ada data pangkalan. Klik tombol tambah untuk membuat data baru.</div>
         ) : (
@@ -320,7 +359,7 @@ export default function Pangkalan() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {airbases.map((base) => {
+                  {sortedBases.map((base) => {
                     const avturPercent = Number(base.avtur_capacity_liters || 0) ? (Number(base.avtur_stock_liters || 0) / Number(base.avtur_capacity_liters || 1)) * 100 : 0;
                     return (
                       <tr key={base.id} className="transition hover:bg-slate-50">
@@ -353,7 +392,18 @@ export default function Pangkalan() {
       {detailBase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setDetailBase(null)}>
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border p-6" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)' }} onClick={(e)=>e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{detailBase.name}</h3><p className="text-xs text-slate-500">{detailBase.kodau || '—'} · {detailBase.code || '-'} · {detailBase.icao || '-'} · {detailBase.latitude != null ? `${Number(detailBase.latitude).toFixed(4)}, ${Number(detailBase.longitude).toFixed(4)}` : '—'} · {detailBase.avtur_percent ?? '-'}% Avtur · {detailBase.apron_used_live ?? detailBase.apron_used ?? 0}/{detailBase.apron_capacity_aircraft ?? 0} apron</p><p className="text-xs text-slate-500">{detailBase.location || '—'}</p></div><button onClick={()=>setDetailBase(null)} className="rounded-lg border px-3 py-1.5 text-sm" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>Tutup</button></div>
+            <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{detailBase.name}</h3><p className="text-xs text-slate-500">{detailBase.kodau || '—'} · <span className="font-mono">{detailBase.code || '—'}</span> · <span className="font-mono">{detailBase.icao || '—'}</span>{detailBase.tipe ? ` · Tipe ${detailBase.tipe}` : ''}{detailBase.runway_m ? ` · RWY ${fmtNum(detailBase.runway_m)} m` : ''}{detailBase.elev_m ? ` · Elev ${fmtNum(detailBase.elev_m)} m` : ''}</p>
+              <p className="text-xs text-slate-500">{detailBase.latitude != null && detailBase.longitude != null ? `${Number(detailBase.latitude).toFixed(4)}, ${Number(detailBase.longitude).toFixed(4)}` : 'Koordinat belum diisi'} · {detailBase.latitude != null ? 'lihat Situational Overview' : ''}</p><p className="text-xs text-slate-500">{detailBase.location || '—'}</p></div><button onClick={()=>setDetailBase(null)} className="rounded-lg border px-3 py-1.5 text-sm" style={{ borderColor: 'var(--card-border)', color: 'var(--text-secondary)' }}>Tutup</button></div>
+            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-3 sm:grid-cols-4" style={{ borderColor: 'var(--card-border)', background: 'var(--surface-muted, var(--input-bg))' }}>
+              <FacilityStat label="Stok Avtur" value={`${fmtNum(detailBase.avtur_stock_liters)} / ${fmtNum(detailBase.avtur_capacity_liters)} L`} tone={detailBase.alert_below_15 ? 'var(--status-kritis)' : detailBase.needs_reorder ? 'var(--status-waspada)' : undefined} />
+              <FacilityStat label="Titik Reorder" value={fmtNum(detailBase.reorder_point_liters, ' L')} />
+              <FacilityStat label="Oli Khusus" value={fmtNum(detailBase.special_lube_stock_liters, ' L')} />
+              <FacilityStat label="Forklift" value={fmtNum(detailBase.forklifts_count)} />
+              <FacilityStat label="Truk Refueler" value={`${fmtNum(detailBase.refueler_trucks_active)} / ${fmtNum(detailBase.refueler_trucks_count)}`} tone={detailBase.refueler_trucks_count > 0 && !detailBase.refueler_trucks_active ? 'var(--status-kritis)' : undefined} />
+              <FacilityStat label="Apron Terpakai" value={`${fmtNum(detailBase.apron_used_live ?? detailBase.apron_used)} / ${fmtNum(detailBase.apron_capacity_aircraft)}`} />
+              <FacilityStat label="Taxi Time" value={fmtNum(detailBase.taxi_time_minutes, ' mnt')} />
+              <FacilityStat label="Minima Alternat" value={detailBase.alternate_minima_ceiling_ft != null ? `${fmtNum(detailBase.alternate_minima_ceiling_ft, ' ft')} / ${fmtNum(detailBase.alternate_minima_vis_m, ' m')}` : '—'} />
+            </div>
             <div className="mt-4 flex gap-2"><input type="number" placeholder="Refill liter" aria-label="Jumlah refill liter" value={refillLiters} onChange={(e)=>setRefillLiters(e.target.value)} className="flex-1 rounded-lg border px-3 py-2" style={{ borderColor: 'var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }} /><button onClick={doRefill} className="rounded-lg px-4 py-2 text-sm font-semibold" style={{ background: 'var(--primary)', color: 'var(--on-primary, #ffffff)' }}>Refill</button></div>
             <div className="mt-4">
               <div className="mb-2 text-xs font-medium text-slate-500">Log avtur. Konsumsi per misi memakai total_fuel_liters.</div>
@@ -390,12 +440,12 @@ export default function Pangkalan() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-600 mb-2">Code (3 huruf)</label>
-                <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().slice(0,4) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="HLM" />
+                <label className="block text-sm font-semibold text-slate-600 mb-2">Kode Lanud (3 huruf)</label>
+                <input required maxLength={3} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,3) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="HLP" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2">ICAO</label>
-                <input value={form.icao} onChange={(e) => setForm({ ...form, icao: e.target.value.toUpperCase().slice(0,5) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="WIHH" />
+                <input maxLength={4} value={form.icao} onChange={(e) => setForm({ ...form, icao: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,4) })} className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" placeholder="WIHH" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2">Latitude</label>

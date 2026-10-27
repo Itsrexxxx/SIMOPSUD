@@ -10,6 +10,11 @@ from app.models.airbase import AirBase
 from app.models.aircraft import AircraftType, AircraftUnit
 from app.api.v1.endpoints.airbase import _compute_status
 from app.schemas.aircraft_schema import TAIL_RE, _validate_tail
+from unittest.mock import MagicMock
+from fastapi import Request
+from app.models.airbase_avtur_log import AirbaseAvturLog
+from app.api.v1.endpoints.airbase import create_airbase, update_airbase, delete_airbase
+from app.schemas.airbase_schema import AirBaseCreate, AirBaseUpdate
 
 class ComputeStatusTest(unittest.TestCase):
     def _s(self, pct, trucks_active=2, trucks_count=2, apron_used=2, apron_cap=10):
@@ -90,4 +95,65 @@ class AircraftTypeCRUDTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             AircraftUnitCreate(tail_number="BAD-12", aircraft_type_id=1)
 
-if __name__=="__main__": unittest.main(verbosity=2)
+class AirbaseAdminTest(unittest.TestCase):
+    """P0/P1: duplikat name/icao = 409, edit stok tercatat, delete pangkalan berlog tidak 500."""
+    @classmethod
+    def setUpClass(cls):
+        Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)
+    @classmethod
+    def tearDownClass(cls): Base.metadata.drop_all(bind=engine)
+    def setUp(self):
+        self.db = SessionLocal()
+        self.db.query(AirbaseAvturLog).delete(); self.db.query(AirBase).delete(); self.db.commit()
+        req = MagicMock(spec=Request); req.client = MagicMock(); req.client.host = "127.0.0.1"; req.headers = {}
+        self.req = req; self.user = MagicMock(); self.user.id = 1
+
+    def tearDown(self): self.db.close()
+
+    def _create(self, name="Lanud Uji", icao="ZZZZ", cap=1000.0, stock=500.0):
+        return create_airbase(AirBaseCreate(name=name, location="x", code="TST", icao=icao,
+                                            latitude=-6.0, longitude=106.0,
+                                            avtur_capacity_liters=cap, avtur_stock_liters=stock),
+                              self.req, self.db, self.user)
+
+    def test_duplicate_name_409(self):
+        self._create(name="Lanud Dup")
+        with self.assertRaises(Exception) as cm:
+            self._create(name="Lanud Dup", icao="YYYY")
+        self.assertEqual(cm.exception.status_code, 409)
+
+    def test_duplicate_icao_409(self):
+        self._create(icao="WIHH")
+        with self.assertRaises(Exception) as cm:
+            self._create(name="Lanud Lain", icao="WIHH")
+        self.assertEqual(cm.exception.status_code, 409)
+
+    def test_stock_edit_writes_avtur_log(self):
+        base = self._create()
+        update_airbase(base["id"], AirBaseUpdate(avtur_stock_liters=700), self.req, self.db, self.user)
+        rows = self.db.query(AirbaseAvturLog).filter(AirbaseAvturLog.airbase_id == base["id"]).all()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].reason, "EDIT")
+        self.assertEqual(float(rows[0].delta_liters), 200.0)
+
+    def test_stock_over_capacity_409(self):
+        base = self._create()
+        with self.assertRaises(Exception) as cm:
+            update_airbase(base["id"], AirBaseUpdate(avtur_stock_liters=99999), self.req, self.db, self.user)
+        self.assertEqual(cm.exception.status_code, 409)
+
+    def test_delete_with_avtur_log_not_500(self):
+        base = self._create()
+        update_airbase(base["id"], AirBaseUpdate(avtur_stock_liters=700), self.req, self.db, self.user)
+        delete_airbase(base["id"], self.req, self.db, self.user)
+        self.assertIsNone(self.db.query(AirBase).filter(AirBase.id == base["id"]).first())
+        self.assertEqual(self.db.query(AirbaseAvturLog).filter(AirbaseAvturLog.airbase_id == base["id"]).count(), 0)
+
+    def test_delete_missing_404(self):
+        with self.assertRaises(Exception) as cm:
+            delete_airbase(99999, self.req, self.db, self.user)
+        self.assertEqual(cm.exception.status_code, 404)
+
+
+if __name__ == "__main__": unittest.main(verbosity=2)
+
