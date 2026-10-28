@@ -6,10 +6,10 @@ import { situationalOverviewAPI, weatherAPI } from '../api';
 import { PageShell } from '../components/PageShell';
 import { formatTimeOnly, parseUtc } from '../time';
 
-const TILES = {
-  dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap &copy; CARTO' },
-  light: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' },
-};
+// Satu penyedia tile tanpa API key untuk kedua tema. Mode gelap tidak menukar provider
+// (CARTO dark bisa kosong/butuh kunci di sebagian jaringan) — cukup filter CSS pada
+// tile pane, jadi marker, label, dan garis rute tetap normal.
+const TILES = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' };
 const STATUS_LABEL = { optimal: 'Optimal', warning: 'Waspada', critical: 'Kritis' };
 const panel = { background: 'var(--card-bg)', borderColor: 'var(--card-border)' };
 const num = (value, digits = 0) => (value === null || value === undefined || value === '' ? '—' : Number(value).toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
@@ -60,7 +60,7 @@ function FitMap({ airbases, tracks, adsbTracks, national }) {
   useEffect(() => {
     if (fitted) return;
     if (national) {
-      map.fitBounds(INDONESIA_VIEW, { padding: [0, 0], animate: false });
+      map.fitBounds(INDONESIA_VIEW, { padding: [28, 28], animate: false });
       setFitted(true);
       return;
     }
@@ -141,7 +141,6 @@ export default function SituationalOverview() {
   const [weatherError, setWeatherError] = useState('');
   const requestRef = useRef(0);
   const dark = useDarkTheme();
-  const tiles = dark ? TILES.dark : TILES.light;
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
@@ -284,8 +283,8 @@ export default function SituationalOverview() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <div className="relative w-full flex-1 overflow-hidden rounded-xl border" style={panel}>
-              <MapContainer center={center} zoom={5} className="aspect-[4/3] w-full lg:aspect-[16/9] lg:h-auto" scrollWheelZoom>
-                <TileLayer attribution={tiles.attr} url={tiles.url} />
+              <MapContainer center={center} zoom={5} zoomSnap={0.5} className={`aspect-[4/3] w-full lg:aspect-[16/9] lg:h-auto${dark ? ' map-dark' : ''}`} scrollWheelZoom>
+                <TileLayer attribution={TILES.attr} url={TILES.url} />
                 <ScaleControl position="bottomright" imperial={false} />
                 <FitMap airbases={mapAirbases} tracks={tracks} adsbTracks={adsbTracks} national={nationalScope} />
                 <MapFocus target={focus} />
@@ -324,7 +323,7 @@ export default function SituationalOverview() {
                   </span>
                 ))}
               </MapContainer>
-              <div className="pointer-events-none absolute left-3 top-3 z-[500] w-[224px] rounded-lg border p-3 text-xs" style={{ ...panel, boxShadow: 'var(--shadow)' }}>
+              <div aria-label="Legenda peta" className="absolute bottom-3 left-3 z-[500] w-[224px] rounded-lg border p-3 text-xs opacity-100 transition-opacity duration-200 focus-within:opacity-100 md:opacity-40 md:hover:opacity-100" style={{ ...panel, boxShadow: 'var(--shadow)' }}>
                 <div className="font-bold" style={{ color: 'var(--text-primary)' }}>{coverage ? coverage.base_name : 'Coverage tidak tersedia'}</div>
                 <div className="mt-0.5" style={{ color: 'var(--text-secondary)' }}>{coverageText}</div>
                 <div className="mt-2 space-y-1" style={{ color: 'var(--text-secondary)' }}>

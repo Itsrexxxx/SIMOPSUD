@@ -2816,3 +2816,8 @@ html.dark .sidebar-footer { background: var(--surface-container-highest) !import
   .leaflet-container .leaflet-popup-content { margin: 10px 12px; font-size: 12px; }
   .leaflet-container .leaflet-popup-close-button { color: var(--text-secondary); }
 
+
+/* === Peta Situational Overview: mode gelap tanpa ganti provider tile (tanpa API key) === */
+.leaflet-container.map-dark { background: #0b1220; }
+.leaflet-container.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.7); }
+.leaflet-container.map-dark .leaflet-control-scale-line { background: rgba(15,23,42,0.7); color: var(--text-secondary); border-color: var(--card-border); }
