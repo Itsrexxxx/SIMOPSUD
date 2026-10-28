@@ -36,6 +36,10 @@ CRUISE_SPEED_LOOKUP = {
 
 _MODEL_DIR = Path(__file__).resolve().parent / "_models"
 
+# Batas atas kompensasi non-fisika (taxi/antrian/delay). Model joblib memprediksi DURASI
+# total, jadi selisihnya terhadap air time fisika yang dipakai — bukan angkanya langsung.
+MAX_DELAY_BUFFER_MINUTES = 60.0
+
 class ETAPredictionEngine:
     def __init__(self):
         self.model = None
@@ -151,7 +155,8 @@ class ETAPredictionEngine:
             self._get_weather_severity(dest_weather.get("weather_code", 0) or 0),
         )
         avg_wind_speed = (float(origin_weather.get("wind_speed_kmh", 0) or 0) + float(dest_weather.get("wind_speed_kmh", 0) or 0)) / 2.0
-        avg_wind_direction = (float(origin_weather.get("wind_direction_deg", 0) or 0) + float(dest_weather.get("wind_direction_deg", 0) or 0)) / 2.0
+        dir_rad = [math.radians(float(w.get("wind_direction_deg", 0) or 0)) for w in (origin_weather, dest_weather)]
+        avg_wind_direction = math.degrees(math.atan2(sum(math.sin(d) for d in dir_rad), sum(math.cos(d) for d in dir_rad))) % 360.0
         physics = calculate_air_time(
             origin_lat, origin_lon, dest_lat, dest_lon, cruise_eff,
             avg_wind_speed, avg_wind_direction, max_weather_severity,
@@ -160,17 +165,21 @@ class ETAPredictionEngine:
         wind_comp = physics["wind_component_kmh"]
         gs = physics["ground_speed_kmh"]
 
-        # ML is only taxi/delay buffer. Inference failure has deterministic 10-minute fallback.
+        air_time = round(float(physics["air_time_minutes"]), 1)
+
+        # Model hanya untuk kompensasi non-fisika. Keluarannya durasi total (target latih
+        # actual_duration_minutes), jadi dipakai selisihnya terhadap air time fisika —
+        # dulu angka durasi itu ditambahkan utuh dan durasi jadi ~2x lipat.
         features = np.array([[distance_km, base_cruise, abs(wind_comp), max_weather_severity]])
         try:
-            delay_buffer = max(0.0, float(self.model.predict(features)[0]))
-            model_status = self.model_source
+            model_duration = float(self.model.predict(features)[0])
+            delay_buffer = min(max(0.0, model_duration - air_time), MAX_DELAY_BUFFER_MINUTES)
+            model_status = f"{self.model_source}:durasi-as-buffer"
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Inferensi taxi/delay buffer gagal: %s", exc)
+            logger.warning("Inferensi durasi gagal, pakai buffer tetap 10 menit: %s", exc)
             delay_buffer = 10.0
             model_status = "fallback:10-minutes"
 
-        air_time = round(float(physics["air_time_minutes"]), 1)
         taxi = float(taxi_time_minutes) if taxi_time_minutes else 0.0
         total_duration = round(air_time + taxi + delay_buffer, 1)
         predicted_arrival = scheduled_departure + timedelta(minutes=total_duration)

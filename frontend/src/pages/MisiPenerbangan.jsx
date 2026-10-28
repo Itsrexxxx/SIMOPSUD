@@ -3,12 +3,13 @@ import { flightMissionAPI, airbaseAPI, aircraftAPI, weatherAPI, extractTotal } f
 import { EmptyState, Modal } from '../components/UI';
 import Pagination from '../components/Pagination';
 import { PageShell } from '../components/PageShell';
+import { formatDateTime, formatTimeOnly, toLocalInput, parseUtc } from '../time';
 
 const defaultForm = {
   aircraft_id: '',
   origin_base_id: '',
   destination_base_id: '',
-  scheduled_departure: new Date().toISOString().slice(0, 16),
+  scheduled_departure: toLocalInput(),
   payload_kg: '',
   flight_level: '',
   alternate_base_id: '',
@@ -62,19 +63,6 @@ function WeatherFreshness({ realtime }) {
       {realtime ? 'Real-time' : 'Estimasi'}
     </span>
   );
-}
-
-function formatDateTime(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-function formatTimeOnly(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function FilterPill({ label, value, options, onChange }) {
@@ -544,7 +532,7 @@ export default function MisiPenerbangan() {
         destination_location: m.destination_location || null,
         route_points: (m.route_legs || []).map((p, index) => ({ ...p, order: p.order ?? index + 1, stop_duration_minutes: p.stop_duration_minutes ?? '' })),
         alternate_locations: m.alternate_locations || [],
-        scheduled_departure: m.scheduled_departure ? new Date(m.scheduled_departure).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+        scheduled_departure: m.scheduled_departure ? toLocalInput(parseUtc(m.scheduled_departure)) : toLocalInput(),
         payload_kg: m.payload_kg != null ? String(m.payload_kg) : '',
         flight_level: m.flight_level != null ? String(m.flight_level) : '',
         alternate_base_id: m.alternate_base_id ? String(m.alternate_base_id) : '',

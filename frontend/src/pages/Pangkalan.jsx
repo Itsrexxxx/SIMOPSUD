@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { airbaseAPI, aircraftAPI, extractTotal } from '../api';
 import { PageShell } from '../components/PageShell';
 import Pagination from '../components/Pagination';
+import { formatDateTime } from '../time';
 
 const emptyForm = {
   id: null,
@@ -62,14 +63,6 @@ function Meter({ label, pct, display, tone, note }) {
       {note && <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{note}</p>}
     </div>
   );
-}
-
-function formatStamp(value) {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '-';
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function toDMS(lat, lon) {
@@ -408,7 +401,7 @@ export default function Pangkalan() {
             <div className="mt-4">
               <div className="mb-2 text-xs font-medium text-slate-500">Log avtur. Konsumsi per misi memakai total_fuel_liters.</div>
               {detailLoading ? <div className="py-6 text-center text-sm text-slate-500">Memuat log…</div> : avturLogs.length===0 ? <div className="py-6 text-center text-sm text-slate-500">Belum ada log.</div> : (
-                <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-3 py-2 text-left text-xs">Waktu</th><th className="px-3 py-2 text-right text-xs">Δ (L)</th><th className="px-3 py-2 text-right text-xs">Sisa</th><th className="px-3 py-2 text-left text-xs">Alasan / Misi</th></tr></thead><tbody className="divide-y">{avturLogs.map(r=>(<tr key={r.id}><td className="px-3 py-2 text-xs tabular-nums">{formatStamp(r.created_at)}</td><td className="px-3 py-2 text-right font-mono text-xs tabular-nums" style={{ color: Number(r.delta_liters)<0?'var(--status-kritis)':'var(--status-aman)' }}>{Number(r.delta_liters)>0?'+':''}{Number(r.delta_liters).toFixed(0)}</td><td className="px-3 py-2 text-right font-mono text-xs">{Number(r.stock_after_liters).toFixed(0)}</td><td className="px-3 py-2 text-xs">{r.reason}{r.mission_id?` #${r.mission_id}`:''}</td></tr>))}</tbody></table></div>
+                <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-3 py-2 text-left text-xs">Waktu</th><th className="px-3 py-2 text-right text-xs">Δ (L)</th><th className="px-3 py-2 text-right text-xs">Sisa</th><th className="px-3 py-2 text-left text-xs">Alasan / Misi</th></tr></thead><tbody className="divide-y">{avturLogs.map(r=>(<tr key={r.id}><td className="px-3 py-2 text-xs tabular-nums">{formatDateTime(r.created_at)}</td><td className="px-3 py-2 text-right font-mono text-xs tabular-nums" style={{ color: Number(r.delta_liters)<0?'var(--status-kritis)':'var(--status-aman)' }}>{Number(r.delta_liters)>0?'+':''}{Number(r.delta_liters).toFixed(0)}</td><td className="px-3 py-2 text-right font-mono text-xs">{Number(r.stock_after_liters).toFixed(0)}</td><td className="px-3 py-2 text-xs">{r.reason}{r.mission_id?` #${r.mission_id}`:''}</td></tr>))}</tbody></table></div>
               )}
             </div>
           </div>

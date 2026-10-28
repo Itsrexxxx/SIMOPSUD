@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { situationalOverviewAPI, weatherAPI } from '../api';
 import { PageShell } from '../components/PageShell';
+import { formatTimeOnly, parseUtc } from '../time';
 
 const TILES = {
   dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap &copy; CARTO' },
@@ -12,7 +13,7 @@ const TILES = {
 const STATUS_LABEL = { optimal: 'Optimal', warning: 'Waspada', critical: 'Kritis' };
 const panel = { background: 'var(--card-bg)', borderColor: 'var(--card-border)' };
 const num = (value, digits = 0) => (value === null || value === undefined || value === '' ? '—' : Number(value).toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
-const jam = (value) => (value ? new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—');
+const jam = (value) => formatTimeOnly(value);
 const cssVar = (name, fallback) => (typeof document === 'undefined' ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback);
 
 const planeIcons = new Map();  // 1 ikon per 10 derajat, bukan 119 divIcon baru tiap poll
@@ -241,7 +242,7 @@ export default function SituationalOverview() {
   const pick = (item) => { setSelection({ type: item.type, data: item.ref }); setFocus(item.point || null); };
   const missionEta = (track) => {
     if (!track?.eta) return '—';
-    const minutes = Math.round((new Date(track.eta).getTime() - Date.now()) / 60000);
+    const minutes = Math.round((parseUtc(track.eta).getTime() - Date.now()) / 60000);
     return `${jam(track.eta)}${minutes > 0 ? ` · ${minutes} mnt lagi` : ''}`;
   };
 
