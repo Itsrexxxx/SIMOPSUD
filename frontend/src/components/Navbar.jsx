@@ -8,12 +8,13 @@ export default function Navbar({ onMenuToggle }) {
   const { user, getInitials, logout } = useUser();
   const [clock, setClock] = useState({ time: '--:--', date: '' });
   const [showLogout, setShowLogout] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
       const wib = now.toLocaleTimeString('id-ID', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour: '2-digit', minute: '2-digit',
         timeZone: 'Asia/Jakarta',
       });
       const date = now.toLocaleDateString('id-ID', {
@@ -23,64 +24,61 @@ export default function Navbar({ onMenuToggle }) {
       setClock({ time: wib, date });
     };
     tick();
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const getRoleDisplay = (role) => {
-    const roleMap = {
-      'Admin': 'Administrator Sistem',
-      'Administrator': 'Administrator Sistem',
-      'Operator': 'Operator Sistem',
-      'Analyst': 'Operator Sistem',
-      'Pimpinan': 'Pimpinan / Commander',
-      'Executive': 'Pimpinan / Commander',
-    };
-    return roleMap[role] || role || 'Officer';
-  };
+  const roleDisplay = {
+    Admin: 'Administrator Sistem',
+    Administrator: 'Administrator Sistem',
+    Operator: 'Operator Sistem',
+    Analyst: 'Operator Sistem',
+    Pimpinan: 'Pimpinan',
+    Executive: 'Pimpinan',
+  }[user?.role] || user?.role || 'Officer';
 
   return (
     <>
       <nav className="navbar" aria-label="Bar atas">
         <div className="navbar-left">
           {onMenuToggle && (
-            <button type="button" aria-label="Buka menu" onClick={onMenuToggle} className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden">
+            <button type="button" aria-label="Buka menu" onClick={onMenuToggle} className="navbar-menu">
               <span className="material-symbols-outlined" aria-hidden="true">menu</span>
             </button>
           )}
-          <div className="min-w-0">
-            <div className="navbar-title">SIMOPSUD</div>
-            <div className="navbar-subtitle hidden sm:block truncate max-w-[28ch] lg:max-w-none">Predictive Operations Intelligence | TNI AU Command Center</div>
-          </div>
-          <div className="navbar-clock-panel hidden md:block">
-            <div className="navbar-clock">{clock.time} WIB</div>
-            <div className="navbar-clock-date">{clock.date}</div>
-          </div>
+          <span className="navbar-clock">{clock.time} WIB</span>
+          <span className="navbar-date">{clock.date}</span>
         </div>
 
         <div className="navbar-right">
           <ThemeToggle />
-          <button type="button" className="icon-button" aria-label="Notifikasi">
-            <span className="material-symbols-outlined" aria-hidden="true">notifications</span>
-            <span className="notification-dot" aria-hidden="true" />
-          </button>
-          <div className="profile-card">
-            <div className="profile-meta">
-              <p className="profile-name">{user?.full_name || 'User'}</p>
-              <p className="profile-role">{getRoleDisplay(user?.role)}</p>
-            </div>
-            <div className="profile-avatar">
-              {user?.avatar_url ? (
-                <img src={user.avatar_url} alt={user.full_name} />
-              ) : (
-                <div className="avatar-initials">
-                  {getInitials()}
+          <div className="user-menu">
+            <button
+              type="button"
+              className="user-trigger"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <span className="user-avatar" aria-hidden="true">{getInitials()}</span>
+              <span className="user-name">{user?.full_name || 'User'}</span>
+              <span className="material-symbols-outlined user-chevron" aria-hidden="true">expand_more</span>
+            </button>
+
+            {menuOpen && (
+              <>
+                <button type="button" className="user-menu-scrim" aria-label="Tutup menu pengguna" onClick={() => setMenuOpen(false)} />
+                <div className="user-popover" role="menu">
+                  <p className="user-popover-head">
+                    {user?.full_name || 'User'}
+                    <span>{roleDisplay}</span>
+                  </p>
+                  <NavLink to="/profile" role="menuitem" onClick={() => setMenuOpen(false)}>Profil</NavLink>
+                  <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setShowLogout(true); }}>Keluar</button>
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
-          <NavLink className="navbar-link" to="/profile">Profil</NavLink>
-          <button type="button" className="navbar-link" onClick={() => setShowLogout(true)}>Keluar</button>
         </div>
       </nav>
 

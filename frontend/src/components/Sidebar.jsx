@@ -3,14 +3,14 @@ import { useUser } from '../context/UserContext';
 import { useMemo } from 'react';
 
 const menuItems = [
-  { path: '/', icon: 'dashboard', label: 'Dashboard Utama', section: 'OPERASI' },
-  { path: '/pesawat', icon: 'flight', label: 'Inventaris Pesawat', section: 'DATA OPERASI' },
-  { path: '/tipe-pesawat', icon: 'category', label: 'Tipe Pesawat', section: 'DATA OPERASI' },
-  { path: '/pangkalan', icon: 'location_on', label: 'Pangkalan & Logistik', section: 'DATA OPERASI' },
-  { path: '/misi-penerbangan', icon: 'flight_takeoff', label: 'Prediksi ETA & Misi', section: 'OPERASI' },
-  { path: '/situational-overview', icon: 'map', label: 'Situational Overview', section: 'OPERASI' },
-  { path: '/audit-trail', icon: 'receipt_long', label: 'Audit Trail', section: 'ADMINISTRASI' },
-  { path: '/users', icon: 'manage_accounts', label: 'Manajemen Pengguna', section: 'ADMINISTRASI' },
+  { path: '/', icon: 'dashboard', label: 'Dashboard', section: 'Operasi' },
+  { path: '/misi-penerbangan', icon: 'flight_takeoff', label: 'Prediksi ETA & Misi', section: 'Operasi' },
+  { path: '/situational-overview', icon: 'map', label: 'Situational Overview', section: 'Operasi' },
+  { path: '/pesawat', icon: 'flight', label: 'Pesawat', section: 'Data' },
+  { path: '/tipe-pesawat', icon: 'category', label: 'Tipe Pesawat', section: 'Data' },
+  { path: '/pangkalan', icon: 'location_on', label: 'Pangkalan & Logistik', section: 'Data' },
+  { path: '/audit-trail', icon: 'receipt_long', label: 'Audit Trail', section: 'Administrasi' },
+  { path: '/users', icon: 'manage_accounts', label: 'Pengguna', section: 'Administrasi' },
 ];
 
 const permissionByPath = {
@@ -44,22 +44,16 @@ export default function Sidebar({ open = false, onClose }) {
     return [...m.entries()];
   }, [visibleItems]);
 
-  const apiUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-
   return (
     <aside className={`sidebar${open ? ' open' : ''}`} aria-label="Navigasi utama">
-      <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <div className="logo-emblem">
-            <img src="/logo_au.png" alt="TNI AU Crest" />
-          </div>
-          <div>
-            <div className="logo-text-main">SIMOPSUD</div>
-            <div className="logo-text-sub">TNI Angkatan Udara</div>
-          </div>
+      <div className="sidebar-brand">
+        <img className="brand-mark" src="/logo_au.png" alt="Lambang TNI AU" />
+        <div className="brand-text">
+          <div className="brand-name">SIMOPSUD</div>
+          <div className="brand-sub">TNI Angkatan Udara</div>
         </div>
         {onClose && (
-          <button type="button" aria-label="Tutup menu" onClick={onClose} className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden">
+          <button type="button" aria-label="Tutup menu" onClick={onClose} className="sidebar-close">
             <span className="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         )}
@@ -67,8 +61,8 @@ export default function Sidebar({ open = false, onClose }) {
 
       <nav className="sidebar-nav" aria-label="Menu">
         {grouped.map(([section, items]) => (
-          <div key={section}>
-            <div className="nav-section-label">{section}</div>
+          <div className="nav-group" key={section}>
+            <p className="nav-group-label">{section}</p>
             {items.map((item) => (
               <NavLink
                 key={item.path}
@@ -78,20 +72,12 @@ export default function Sidebar({ open = false, onClose }) {
                 className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
               >
                 <span className="nav-icon material-symbols-outlined" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
+                <span className="nav-label">{item.label}</span>
               </NavLink>
             ))}
           </div>
         ))}
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="server-status">
-          <span className="status-dot" aria-hidden="true"></span>
-          <span>Server Backend: Aktif</span>
-        </div>
-        <div className="footer-meta" title={apiUrl}>API: {apiUrl}</div>
-      </div>
     </aside>
   );
 }
