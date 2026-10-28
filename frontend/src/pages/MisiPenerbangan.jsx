@@ -3,7 +3,7 @@ import { flightMissionAPI, airbaseAPI, aircraftAPI, weatherAPI, extractTotal } f
 import { EmptyState, Modal } from '../components/UI';
 import Pagination from '../components/Pagination';
 import { PageShell } from '../components/PageShell';
-import { formatDateTime, formatTimeOnly, toLocalInput, parseUtc } from '../time';
+import { formatDateTime, formatTimeOnly, toLocalInput, parseUtc, localInputToUtc } from '../time';
 
 const defaultForm = {
   aircraft_id: '',
@@ -482,7 +482,7 @@ export default function MisiPenerbangan() {
         ...(form.origin_base_id ? { origin_base_id: parseInt(form.origin_base_id) } : { origin_location: { ...form.origin_location, latitude: Number(form.origin_location.latitude), longitude: Number(form.origin_location.longitude) } }),
         ...(form.destination_base_id ? { destination_base_id: parseInt(form.destination_base_id) } : { destination_location: { ...form.destination_location, latitude: Number(form.destination_location.latitude), longitude: Number(form.destination_location.longitude) } }),
         route_points: form.route_points.map((p) => ({ ...p, latitude: Number(p.latitude), longitude: Number(p.longitude), stop_duration_minutes: p.stop_duration_minutes ? Number(p.stop_duration_minutes) : null })),
-        scheduled_departure: new Date(form.scheduled_departure).toISOString(),
+        scheduled_departure: localInputToUtc(form.scheduled_departure),
         payload_kg: form.payload_kg ? parseFloat(form.payload_kg) : 0,
         flight_level: form.flight_level ? parseInt(form.flight_level) : null,
         alternate_base_id: form.alternate_base_id ? parseInt(form.alternate_base_id) : null,
@@ -505,7 +505,7 @@ export default function MisiPenerbangan() {
         ...(form.destination_base_id ? { destination_base_id: parseInt(form.destination_base_id) } : { destination_location: { ...form.destination_location, latitude: Number(form.destination_location.latitude), longitude: Number(form.destination_location.longitude) } }),
         route_points: form.route_points.map((p) => ({ ...p, latitude: Number(p.latitude), longitude: Number(p.longitude), stop_duration_minutes: p.stop_duration_minutes ? Number(p.stop_duration_minutes) : null })),
         alternate_locations: form.alternate_locations,
-        scheduled_departure: new Date(form.scheduled_departure).toISOString(),
+        scheduled_departure: localInputToUtc(form.scheduled_departure),
         payload_kg: form.payload_kg ? parseFloat(form.payload_kg) : 0,
         flight_level: form.flight_level ? parseInt(form.flight_level) : null,
         alternate_base_id: form.alternate_base_id ? parseInt(form.alternate_base_id) : null,
