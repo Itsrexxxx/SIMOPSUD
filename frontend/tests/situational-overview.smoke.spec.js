@@ -27,7 +27,7 @@ test('login, open Situational Overview, render markers and survive polling', asy
     });
   });
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
   await page.goto('/situational-overview');
@@ -71,7 +71,7 @@ test('cakupan nasional membuka peta pas satu Indonesia, bukan zoom out', async (
     }),
   }));
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
   await page.goto('/situational-overview');

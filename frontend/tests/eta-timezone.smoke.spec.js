@@ -49,7 +49,7 @@ test('jam ETD/ETA misi tampil dalam WIB, bukan UTC mentah', async ({ page }) => 
   }));
 
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
 

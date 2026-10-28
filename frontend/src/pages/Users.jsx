@@ -131,7 +131,7 @@ function UsersCard({ user, editingId, draftServiceUnit, setDraftServiceUnit, dra
 
         <div className="mb-4 relative max-w-sm">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">⌕</span>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama / username / NIP…" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama / username / NRP…" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
@@ -153,7 +153,7 @@ function UsersCard({ user, editingId, draftServiceUnit, setDraftServiceUnit, dra
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Identitas Personel</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">NIP</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">NRP</th>
                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Satuan Kerja</th>
                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Role</th>
                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Status Akun</th>
@@ -234,7 +234,7 @@ function UsersCard({ user, editingId, draftServiceUnit, setDraftServiceUnit, dra
                 {[
                   ['full_name', 'Nama Lengkap', 'text'],
                   ['username', 'Username', 'text'],
-                  ['nip', 'NIP', 'text'],
+                  ['nip', 'NRP', 'text'],
                   ['email', 'Email', 'email'],
                   ['service_unit', 'Satuan Kerja', 'text'],
                   ['password', 'Password', 'password'],

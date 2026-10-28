@@ -36,7 +36,7 @@ test('form prediksi ETA menerima ketikan panjang dan fokus tidak tercuri', async
   }));
 
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
 

@@ -18,7 +18,7 @@ class UserBase(BaseModel):
     
     username: str = Field(..., min_length=3, max_length=100, description="Login username")
     full_name: str = Field(..., min_length=1, max_length=150, description="Full name")
-    nip: str = Field(..., min_length=1, max_length=50, description="NRP/NIP personel; alfanumerik")
+    nip: str = Field(..., min_length=1, max_length=50, description="NRP personel; alfanumerik")
     service_unit: str = Field(..., min_length=1, max_length=100, description="Military unit/division")
     email: Optional[str] = Field(None, max_length=255)
 

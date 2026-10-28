@@ -13,7 +13,7 @@ for (const vp of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.route('**/api/v1/auth/login', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ access_token: 't', user: session }) }));
 
     await page.goto('/login');
-    await page.getByLabel('Username / NIP').fill('smoke');
+    await page.getByLabel('Username atau NRP').fill('smoke');
     await page.getByLabel('Password').fill('SmokePassword123!');
     await page.getByRole('button', { name: 'Masuk' }).click();
     await page.locator('.sidebar').waitFor();

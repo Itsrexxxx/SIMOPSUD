@@ -70,7 +70,7 @@ export default function Profile() {
                 <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600" value={user?.username || ''} disabled />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">NIP</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">NRP</label>
                 <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600" value={user?.nip || ''} disabled />
               </div>
               <div>

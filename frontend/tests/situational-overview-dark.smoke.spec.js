@@ -30,7 +30,7 @@ test('mode gelap: peta tetap satu provider OSM, tanpa host tile lain', async ({ 
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem('simopsud-theme', 'dark'));
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
   await page.goto('/situational-overview');
@@ -45,7 +45,7 @@ test('mode gelap: peta tetap satu provider OSM, tanpa host tile lain', async ({ 
 test('legenda peta tembus pandang saat kursor tidak di atasnya', async ({ page }) => {
   await mockApi(page);
   await page.goto('/login');
-  await page.getByLabel('Username / NIP').fill('smoke');
+  await page.getByLabel('Username atau NRP').fill('smoke');
   await page.getByLabel('Password').fill('SmokePassword123!');
   await page.getByRole('button', { name: 'Masuk' }).click();
   await page.goto('/situational-overview');
