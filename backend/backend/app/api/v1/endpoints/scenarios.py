@@ -11,6 +11,7 @@ from app.schemas.scenario_schema import (
     OperationsScenarioCreate, OperationsScenarioResponse, 
     ScenarioDeploymentCreate, ScenarioDeploymentResponse
 )
+from app.services.aircraft_status import derived_status
 from app.services.simulation_engine import SimulationEngine
 
 router = APIRouter()
@@ -20,7 +21,8 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     """Calculate current operational risk without requiring a scenario run."""
     aircraft_units = db.query(AircraftUnit).all()
     airbases = db.query(AirBase).all()
-    ready_aircraft = [unit for unit in aircraft_units if unit.status == "S"]
+    ready = lambda unit: derived_status(unit, unit.aircraft_type) == "S"  # noqa: E731
+    ready_aircraft = [unit for unit in aircraft_units if ready(unit)]
     average_flight_hours = (
         sum(float(unit.accumulated_flight_hours or 0) for unit in aircraft_units) / len(aircraft_units)
         if aircraft_units else 0
@@ -31,7 +33,7 @@ def get_automatic_prediction(db: Session = Depends(get_db)):
     for airbase in airbases:
         assigned_ready_aircraft = [
             aircraft for aircraft in airbase.aircraft_units
-            if aircraft.status == "S"
+            if ready(aircraft)
         ]
         deployed_aircraft = len(assigned_ready_aircraft)
         airbase_average_flight_hours = (

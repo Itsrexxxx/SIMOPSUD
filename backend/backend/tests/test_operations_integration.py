@@ -145,6 +145,22 @@ class OperationsIntegrationTests(unittest.TestCase):
         self.assertNotIn("Lanud Nonaktif", [row["name"] for row in result["aircraft"]["per_airbase"]])
         self.assertFalse(any("Nonaktif" in alert["title"] for alert in result["alerts"]))
 
+    def test_mission_gate_uses_derived_status_not_legacy_column(self):
+        """Pesawat dengan kolom status warisan (READY) tetap boleh dipakai untuk misi baru."""
+        base = AirBase(name="Lanud Gerbang", location="G")
+        typ = AircraftType(name="Gerbang Type")
+        self.db.add_all([base, typ])
+        self.db.commit()
+        siap = AircraftUnit(tail_number="GATE-001", aircraft_type=typ, airbase=base, status="READY")
+        rusak = AircraftUnit(tail_number="GATE-002", aircraft_type=typ, airbase=base, status="READY", squawk_discrepancy="avionik")
+        self.db.add_all([siap, rusak])
+        self.db.commit()
+
+        fm.ensure_aircraft_available(siap, [])  # tidak boleh raise
+        with self.assertRaises(HTTPException) as ctx:
+            fm.ensure_aircraft_available(rusak, [])
+        self.assertEqual(ctx.exception.status_code, 409)
+
     def test_avtur_consumption_is_idempotent(self):
         origin = AirBase(name="Lanud Fuel", location="F", avtur_capacity_liters=1000, avtur_stock_liters=1000)
         dest = AirBase(name="Lanud Fuel Dest", location="D")

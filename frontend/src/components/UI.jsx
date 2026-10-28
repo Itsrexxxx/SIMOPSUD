@@ -28,8 +28,12 @@ export function Spinner({ label = '' }) {
 
 export function Modal({ title, onClose, children, footer }) {
   const dialogRef = useRef(null);
+  // onClose disimpan di ref: pemanggil biasanya mengirim arrow function baru tiap render,
+  // kalau masuk deps effect fokus, efek jalan ulang tiap ketikan dan fokus input tercuri.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    const onKey = (e) => { if (e.key === 'Escape') closeRef.current?.(); };
     document.addEventListener('keydown', onKey);
     const prev = document.activeElement;
     setTimeout(() => {
@@ -43,7 +47,7 @@ export function Modal({ title, onClose, children, footer }) {
       document.body.style.overflow = prevOverflow;
       if (prev instanceof HTMLElement) prev.focus();
     };
-  }, [onClose]);
+  }, []);
   const onKeyDown = (e) => {
     if (e.key !== 'Tab' || !dialogRef.current) return;
     const focusable = [...dialogRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.hasAttribute('disabled'));
@@ -54,7 +58,7 @@ export function Modal({ title, onClose, children, footer }) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose} aria-hidden="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         ref={dialogRef}
         role="dialog"

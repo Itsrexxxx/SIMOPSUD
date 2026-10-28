@@ -53,7 +53,10 @@ def calculate_eta_variance_minutes(predicted: datetime | None, actual: datetime 
 
 
 def ensure_aircraft_available(aircraft: AircraftUnit, active_missions: list[FlightMission]) -> None:
-    if aircraft.status != "S":
+    # status kolom DB bisa warisan (READY/MAINTENANCE/...); pakai status turunan yang sama
+    # dengan modul Pesawat supaya pesawat serviceable tidak ditolak saat membuat misi.
+    from app.services.aircraft_status import derived_status
+    if derived_status(aircraft, aircraft.aircraft_type) != "S":
         raise HTTPException(status_code=409, detail="Pesawat harus berstatus S sebelum misi dibuat")
     if active_missions:
         raise HTTPException(status_code=409, detail="Pesawat sudah memiliki misi aktif")
