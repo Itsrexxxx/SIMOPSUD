@@ -107,6 +107,8 @@ export function UserProvider({ children }) {
       localStorage.removeItem('user');
       setUser(null);
       setError(null);
+      // hard reset: state kosong saja bisa kalah balapan dengan render/polling yang masih jalan
+      if (window.location.pathname !== '/login') window.location.replace('/login');
     } catch (err) {
       console.error('Failed to logout:', err);
     }
